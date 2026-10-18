@@ -96,9 +96,9 @@ Batterie de tests REST exécutée ce jour (résultats) :
 ## 12. SEO — ✔️ Fait, partiellement preparé
 
 - `index.html` : title/description FR, Open Graph, `lang="fr"`, preconnects, fonts.
-- `robots.txt` (exclusions admin/compte) et `sitemap.xml` créés (sitemap de départ avec les annonces démo ; à régénérer dynamiquement avec les annonces réelles — voir README).
+- `robots.txt` (exclusions admin/compte) + **sitemap dynamique généré à chaque build** (`scripts/generate-sitemap.mjs`, hook `prebuild`) : interroge l'API publique, inclut les pages principales et toutes les annonces actives avec `lastmod` ; hors-ligne il se dégrade proprement (pages principales uniquement, jamais d'échec de build). Testé : 18 URLs générées depuis la BDD réelle.
 - **Fait** : balises meta dynamiques par page (title + description + Open Graph) via `usePageMeta`, appliquées aux 13 pages (accueil, catalogue, fiche annonce, compte, admin, pages statiques, 404, …).
-- **Preparé** : sitemap dynamique (régénéré avec les annonces réelles) et canonical URL — en attente du domaine final ; `sitemap.xml` de départ déjà fourni.
+- **Preparé** : canonical URL et domaine dans le sitemap — variable `GM_SITE_URL` à définir côté hébergeur quand le domaine final sera connu.
 
 ## 13. Pages statiques & 404 — ✅ Fait et testé
 
@@ -109,7 +109,7 @@ Batterie de tests REST exécutée ce jour (résultats) :
 
 - `npm run build` (TypeScript strict + Vite + PWA) : **réussite** sans avertissement. Découpe de bundle faite (18/10) : le client Supabase est isolé dans son propre chunk — JS principal **298 kB / gzip 91 kB** + chunk `supabase` 214 kB / gzip 55 kB, CSS 34,7 kB.
 - Préview de développement accessible (hôte autorisé, HTTP 200) et **smoke test navigateur headless : 21/21 assertions réussies** (accueil, recherche, connexion démo, favoris, gating admin, admin, desktop, 404, fiche annonce, redirection publication).
-- **Preparé** : hébergement final (Netlify/Vercel/Cloudflare Pages gratuits) + domaine — en attente de votre choix (aucun compte tiers n'a été créé).
+- **Preparé (prêt à déployer)** : configs **zéro-config** fournies pour les 3 hébergeurs gratuits — `netlify.toml`, `vercel.json`, `public/_headers` (build, fallback SPA, en-têtes de sécurité `nosniff`/`X-Frame-Options`/`Permissions-Policy`, cache des assets, `sw.js` non caché). Il ne reste que le choix de l'hébergeur + le domaine (aucun compte tiers n'a été créé).
 
 ## 15. Documentation, comptes & limites connues — ✅ Fait
 
@@ -117,7 +117,7 @@ Batterie de tests REST exécutée ce jour (résultats) :
 - **Comptes** :
   - Démo : `demo@godson-market.example` / `Demo1234!` (badge Démo, retirable en 3 lignes SQL).
   - Administration : `admin@godson-market.example` / `Admin1234!` (créé aujourd'hui, rôle `admin` en base). **À changer impérativement** après la première connexion.
-- **Import GitHub** : le connecteur GitHub n'est pas disponible dans cette session → le dépôt `godson-marketplace` doit être poussé manuellement : `git remote add origin https://github.com/<vous>/godson-marketplace.git && git push -u origin main` (le `.gitignore` exclut déjà `node_modules`, `.env`, `dist`).
+- **GitHub** : le repo est **initialisé localement avec un commit initial sur `main`** (91 fichiers, `.env`/`node_modules`/`dist` exclus). Le connecteur GitHub n'étant pas disponible dans cette session, le push reste à faire : `git remote add origin https://github.com/<vous>/godson-marketplace.git && git push -u origin main` (voir README « Déploiement GitHub »).
 - **Limites v1 assumées** :
   1. Pas de paiement en ligne (contact direct — par décision de v1).
   2. Pas d'IA de classement (les annonces sont triées par recence/prix uniquement — aucun « boost » simulé).
@@ -130,4 +130,5 @@ Batterie de tests REST exécutée ce jour (résultats) :
 ### Ce qui est immédiatement utilisable
 - Préview live de la v1 complète (front + base en production), comptes démo et admin fonctionnels.
 - Base saine : 0 donnée de test résiduelle, 10 annonces démo labellisées, 2 comptes (démo + admin).
-- Repo prêt à être poussé sur GitHub et déployé sur n'importe quel hébergeur statique gratuit.
+- **Développement terminé** : build propre (sans avertissement), 57 assertions de tests vertes (34 API + 23 E2E), sitemap dynamique à la build, configs de déploiement zéro-config pour Netlify/Vercel/Cloudflare, repo git initialisé avec commit.
+- Il ne reste que des actions **externes** (choix de l'hébergeur, domaine final, push GitHub, changement du mot de passe admin) — aucune tâche de développement ouverte.

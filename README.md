@@ -46,6 +46,32 @@ npm run test:e2e       # 23 assertions navigateur (Playwright) — nécessite `n
   créent (sauf l'utilisateur temporaire de la suite API, affiché en fin de run — sa
   suppression requiert du SQL : `delete from auth.users where id = '<id>';`).
 
+## Mise en production
+
+Le repo est **zéro-config** pour les trois hébergeurs statiques gratuits (build, SPA,
+en-têtes de sécurité et cache définis dans `netlify.toml`, `vercel.json`, `public/_headers`) :
+
+1. Pousser le repo sur GitHub (voir « Déploiement » ci-dessous).
+2. Importer le repo dans Netlify / Vercel / Cloudflare Pages → le build tourne tout seul
+   (le sitemap est régénéré à chaque build depuis la BDD Supabase, annonces actives incluses).
+
+Une fois le **domaine final** connu, il reste 3 réglages (5 minutes) :
+
+| Où | Quoi |
+|---|---|
+| Hébergeur | Pointer le domaine vers le site |
+| Hôte CI (optionnel) | Variable `GM_SITE_URL=https://votre-domaine` → le sitemap utilise le vrai domaine ; sans elle, `https://votre-domaine.com` reste en placeholder |
+| Supabase | `site_url` = votre domaine (Auth → URL du site) pour les e-mails de mot de passe oublié ; ajouter le domaine dans `uri_allow_list` si besoin |
+
+## Déploiement GitHub
+
+Le repo est initialisé localement avec un commit initial sur `main`. Pousser :
+
+```bash
+git remote add origin https://github.com/<votre-compte>/godson-marketplace.git
+git push -u origin main
+```
+
 ## Base de données
 
 Migrations versionnées dans `supabase/migrations/` (à appliquer dans l'ordre, ex. via
