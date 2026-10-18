@@ -117,7 +117,10 @@ delete from auth.users where id = '9c1f6a7e-0000-4a11-8b2c-d3e4f5060d01';
 | Rôle | E-mail | Mot de passe |
 |---|---|---|
 | Démonstration (visuel uniquement) | `demo@godson-market.example` | `Demo1234!` |
-| Administration | voir note de déploiement | — |
+| Administration | comptes `admin` de l'exploitant (rôle `admin` dans `profiles`) | jamais stocké ici |
+
+Le rôle `admin` est accordé en base : `update public.profiles set role='admin' where id='<user_id>';`
+(les mots de passe d'administration ne sont volontairement documentés nulle part dans le repo).
 
 Le compte de démonstration est clairement identifié dans l'interface (badge « Démo ») et ses
 données sont séparables (champ `is_demo`).
