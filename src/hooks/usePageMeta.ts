@@ -1,23 +1,43 @@
 import { useEffect } from 'react';
 
-/** Met à jour le titre et la meta description (SEO + partage social). */
-export function usePageMeta(title: string, description?: string): void {
+const SITE_URL: string = import.meta.env.VITE_SITE_URL || window.location.origin;
+
+/** Image de partage social par défaut (générée à la racine du site). */
+export const DEFAULT_OG_IMAGE = `${SITE_URL}/og-image.png`;
+
+function setMeta(attr: 'name' | 'property', value: string, content: string): void {
+  let el = Array.from(document.querySelectorAll<HTMLMetaElement>('meta')).find((m) => m.getAttribute(attr) === value);
+  if (!el) {
+    el = document.createElement('meta');
+    el.setAttribute(attr, value);
+    document.head.appendChild(el);
+  }
+  el.content = content;
+}
+
+/**
+ * Met à jour le titre, la description et les balises Open Graph
+ * (SEO + partage WhatsApp / réseaux sociaux).
+ *
+ * @param ogImage image de partage pour cette page (si absente, image de marque par défaut).
+ */
+export function usePageMeta(title: string, description?: string, ogImage?: string): void {
   useEffect(() => {
     document.title = title
       ? `${title} — GODSON Marketplace`
       : 'GODSON Marketplace — Le marché gabonais, à portée de clic';
-    if (description) {
-      let el = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-      if (!el) {
-        el = document.createElement('meta');
-        el.name = 'description';
-        document.head.appendChild(el);
-      }
-      el.content = description;
-    }
-    const ogTitle = document.querySelector<HTMLMetaElement>('meta[property="og:title"]');
-    if (ogTitle && title) ogTitle.content = `${title} — GODSON Marketplace`;
-    const ogDesc = document.querySelector<HTMLMetaElement>('meta[property="og:description"]');
-    if (ogDesc && description) ogDesc.content = description;
-  }, [title, description]);
+
+    const suffix = title ? `${title} — GODSON Marketplace` : '';
+    setMeta('name', 'description', description ?? '');
+    if (description) setMeta('property', 'og:description', description);
+    if (suffix) setMeta('property', 'og:title', suffix);
+
+    // og:image : image de la page (absolue si fournie en relatif), sinon image de marque.
+    const img = ogImage
+      ? ogImage.startsWith('http')
+        ? ogImage
+        : `${window.location.origin}${ogImage}`
+      : DEFAULT_OG_IMAGE;
+    setMeta('property', 'og:image', img);
+  }, [title, description, ogImage]);
 }

@@ -60,7 +60,7 @@ Une fois le **domaine final** connu, il reste 3 réglages (5 minutes) :
 | Où | Quoi |
 |---|---|
 | Hébergeur | Pointer le domaine vers le site |
-| Hôte CI (optionnel) | Variable `GM_SITE_URL=https://votre-domaine` → le sitemap utilise le vrai domaine ; sans elle, `https://votre-domaine.com` reste en placeholder |
+| Hôte CI (optionnel) | Variable `VITE_SITE_URL=https://votre-domaine` → le sitemap et les images de partage (og:/twitter:) utilisent le vrai domaine ; sans elle, `https://votre-domaine.com` reste en placeholder |
 | Supabase | `site_url` = votre domaine (Auth → URL du site) pour les e-mails de mot de passe oublié ; ajouter le domaine dans `uri_allow_list` si besoin |
 
 ## Déploiement GitHub

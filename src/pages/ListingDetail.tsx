@@ -93,6 +93,7 @@ export default function ListingDetail() {
   usePageMeta(
     item ? item.listing.title : 'Annonce',
     item ? `${item.listing.description.slice(0, 150)}${item.listing.description.length > 150 ? '…' : ''}` : undefined,
+    item?.images[0],
   );
 
   const onFavorite = useCallback(async () => {

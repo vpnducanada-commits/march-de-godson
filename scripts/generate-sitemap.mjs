@@ -4,7 +4,7 @@
  * Interroge l'API publique Supabase (annonces actives uniquement) et
  * régénère public/sitemap.xml avant chaque build (hook « prebuild »).
  *
- * Domaine : variable GM_SITE_URL (ex. https://godson-market.gp),
+ * Domaine : variable VITE_SITE_URL (définie dans .env, ex. https://godson-market.gp),
  * sinon https://votre-domaine.com (à remplacer).
  *
  * Hors-ligne / DB indisponible : le sitemap est tout de même généré
@@ -16,7 +16,8 @@ import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
-const SITE_URL = (process.env.GM_SITE_URL || 'https://votre-domaine.com').replace(/\/$/, '');
+const env = readEnv();
+const SITE_URL = (env.siteUrl || 'https://votre-domaine.com').replace(/\/$/, '');
 
 function readEnv() {
   let env = {};
@@ -39,7 +40,8 @@ function readEnv() {
   // les variables définies côté hébergeur (la clé publishable est publique).
   const url = process.env.VITE_SUPABASE_URL || env.VITE_SUPABASE_URL || null;
   const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || null;
-  return { url, key };
+  const siteUrl = process.env.VITE_SITE_URL || env.VITE_SITE_URL || null;
+  return { url, key, siteUrl };
 }
 
 function url({ loc, changefreq = 'weekly', priority = '0.8', lastmod = null }) {
@@ -48,7 +50,7 @@ function url({ loc, changefreq = 'weekly', priority = '0.8', lastmod = null }) {
 }
 
 async function fetchActiveListings() {
-  const { url, key } = readEnv();
+  const { url, key } = env;
   if (!url || !key) {
     console.log('[sitemap] .env absent — uniquement les pages principales.');
     return [];

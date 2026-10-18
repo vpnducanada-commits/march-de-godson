@@ -98,7 +98,8 @@ Batterie de tests REST exécutée ce jour (résultats) :
 - `index.html` : title/description FR, Open Graph, `lang="fr"`, preconnects, fonts.
 - `robots.txt` (exclusions admin/compte) + **sitemap dynamique généré à chaque build** (`scripts/generate-sitemap.mjs`, hook `prebuild`) : interroge l'API publique, inclut les pages principales et toutes les annonces actives avec `lastmod` ; hors-ligne il se dégrade proprement (pages principales uniquement, jamais d'échec de build). Testé : 18 URLs générées depuis la BDD réelle.
 - **Fait** : balises meta dynamiques par page (title + description + Open Graph) via `usePageMeta`, appliquées aux 13 pages (accueil, catalogue, fiche annonce, compte, admin, pages statiques, 404, …).
-- **Preparé** : canonical URL et domaine dans le sitemap — variable `GM_SITE_URL` à définir côté hébergeur quand le domaine final sera connu.
+- **Fait (18/10)** : image de partage social **Open Graph / Twitter card** (1200×630, identité GM : monogramme, bleu nuit #0A1633, or #F5B82E, Manrope/Inter) — par défaut sur les 13 pages, et **l'image de l'annonce elle-même** sur les fiches (partage WhatsApp). Domaine injecté via `VITE_SITE_URL` (placeholder `https://vorte-domaine.com` jusqu'au domaine final).
+- **Preparé** : canonical URL — dépend du domaine final.
 
 ## 13. Pages statiques & 404 — ✅ Fait et testé
 
