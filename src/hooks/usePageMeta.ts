@@ -39,5 +39,16 @@ export function usePageMeta(title: string, description?: string, ogImage?: strin
         : `${window.location.origin}${ogImage}`
       : DEFAULT_OG_IMAGE;
     setMeta('property', 'og:image', img);
+
+    // URL canonique + og:url : une URL officielle par page (SEO anti-doublons).
+    const canonical = `${SITE_URL}${window.location.pathname}`;
+    let link = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'canonical';
+      document.head.appendChild(link);
+    }
+    link.href = canonical;
+    setMeta('property', 'og:url', canonical);
   }, [title, description, ogImage]);
 }
