@@ -1,0 +1,98 @@
+# GODSON Marketplace
+
+Petites annonces et marketplace pour le Gabon — français, FCFA (XAF), localités gabonaises,
+contact direct vendeur/acheteur (pas de paiement en ligne en v1).
+
+## Stack
+
+- **Frontend** : React 18 + TypeScript + Vite, React Router 6, PWA (vite-plugin-pwa, Workbox)
+- **Backend** : Supabase (Postgres + RLS, Auth, Storage, PostgREST)
+- **Identité** : bleu nuit `#0A1633`, bleu `#2563EB`, jaune `#F5B82E`, Inter/Manrope, monogramme GM
+
+## Démarrage
+
+```bash
+npm install
+cp .env.example .env   # renseigner VITE_SUPABASE_URL et VITE_SUPABASE_PUBLISHABLE_KEY
+npm run dev            # http://localhost:5173
+npm run build          # vérif TS + build prod (dist/)
+```
+
+Scripts utilitaires :
+
+```bash
+npm run icons          # régénère les icônes PWA (PNG sans dépendance)
+npm run demo-images    # régénère les visuels d'annonces de démonstration (SVG)
+```
+
+## Tests
+
+Deux suites, toutes deux branchées sur l'environnement Supabase de `.env` :
+
+```bash
+npm run test:api       # 34 assertions API / RLS / sécurité (Node, zéro dépendance)
+npm run test:e2e:install   # une fois : télécharge Chromium
+npm run test:e2e       # 23 assertions navigateur (Playwright) — nécessite `npm run dev`
+```
+
+- `tests/api.test.mjs` — auth (login démo/admin, refus de mauvais mot de passe), données,
+  recherche insensible à la casse, tri prix avec nulls, joins FK, RLS (insertion anonyme,
+  modification croisée d'annonces, usurpation de `user_id` dans les favoris, journal d'audit,
+  droits Storage par dossier), et nettoyage intégral en fin de run.
+- `tests/e2e/smoke.mjs` — accueil mobile/desktop, recherche + état vide, connexion réelle,
+  favoris, gating admin, **visibilité et clics réels des onglets** (compte + admin), 404,
+  fiche annonce (prix FCFA, boutons Appeler/WhatsApp, image), redirection publication.
+- Les deux suites créent/consomment des données réelles : elles suppriment tout ce qu'elles
+  créent (sauf l'utilisateur temporaire de la suite API, affiché en fin de run — sa
+  suppression requiert du SQL : `delete from auth.users where id = '<id>';`).
+
+## Base de données
+
+Migrations versionnées dans `supabase/migrations/` (à appliquer dans l'ordre, ex. via
+`supabase db push` ou l'éditeur SQL) :
+
+| Fichier | Rôle |
+|---|---|
+| `001_schema.sql` | Tables, RLS, fonctions, bucket stockage |
+| `002_seed_categories_localities.sql` | 16 catégories (46 sous-catégories) + 21 localités |
+| `003_demo_data.sql` | Compte démo + 10 annonces de démonstration (`is_demo = true`) |
+| `004_admin_rpc.sql` | RPC `admin_list_users()` (SECURITY DEFINER, autorisation en base) |
+| `005_storage_public_bucket.sql` | Bucket images public + purge admin des fichiers |
+
+Retrait des données de démonstration (sans toucher aux données réelles) :
+
+```sql
+delete from public.listings where is_demo = true;
+update public.profiles set is_demo = false;
+delete from auth.users where id = '9c1f6a7e-0000-4a11-8b2c-d3e4f5060d01';
+```
+
+## Comptes
+
+| Rôle | E-mail | Mot de passe |
+|---|---|---|
+| Démonstration (visuel uniquement) | `demo@godson-market.example` | `Demo1234!` |
+| Administration | voir note de déploiement | — |
+
+Le compte de démonstration est clairement identifié dans l'interface (badge « Démo ») et ses
+données sont séparables (champ `is_demo`).
+
+## Choix de conception documentés
+
+- **Images d'annonces** : bucket `listing-images` public (contenu public par nature en petites
+  annonces), écriture strictement propriétaire (`{userId}/...`), suppression possible par un
+  admin (purge des images d'une annonce refusée, cf. `adminModerateListing`).
+- **Administration** : jamais de clé `service_role` dans le navigateur ; le rôle `admin` est
+  vérifié en base (RLS + RPC SECURITY DEFINER). Toute action d'administration est journalisée
+  dans `admin_audit_logs`.
+- **Recherche** : colonne générée `search_text` (normalisation casse + accents) + index
+  `gin_trgm` ; la normalisation côté client (`normalizeText`) reflète celle du SQL.
+- **PWA** : manifest FR, icônes 192/512/masquable, appui offline sur les statiques et les
+  visuels `/demo/` ; les données restent requises en ligne.
+
+## Sécurité
+
+- RLS sur toutes les tables publiques ; lecture publique limitée aux annonces `active`.
+- Mots de passe : bcrypt côté Auth (jamais en clair) ; session JWT supabase-js.
+- Validation des images côté client (type, taille, compression) + politiques Storage.
+- `service_role` absente du code applicatif.

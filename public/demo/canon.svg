@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F1F0FA"/>
+      <stop offset="1" stop-color="#E0DEF4"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <g transform="translate(232,56) scale(2.4)" stroke="#0A1633" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.92">
+    <g transform="translate(8,4)"><path d="M122 52h-24l-10-14H42a12 12 0 0 0-12 12v52a12 12 0 0 0 12 12h80a12 12 0 0 0 12-12V50a12 12 0 0 0-12-12Z"/><circle cx="84" cy="82" r="20"/></g>
+  </g>
+  <text x="400" y="452" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="#0A1633">Canon EOS 250D</text>
+  <text x="400" y="492" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="19" fill="#667085">Image d'exemple — Photo</text>
+  <g>
+    <rect x="24" y="24" width="236" height="40" rx="20" fill="#F5B82E"/>
+    <text x="142" y="50" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="15.5" font-weight="800" fill="#0A1633">ANNONCE DE DÉMONSTRATION</text>
+  </g>
+  <g transform="translate(704,544) scale(0.9)">
+    <rect x="0" y="0" width="52" height="52" rx="11" fill="#0A1633"/>
+    <path d="M 27.1 38.2 A 13.4 13.4 0 1 1 27.1 15.2" stroke="#fff" stroke-width="4.8" stroke-linecap="round" fill="none"/>
+    <line x1="20.5" y1="26" x2="31" y2="26" stroke="#fff" stroke-width="4.8" stroke-linecap="round"/>
+    <path d="M 35.2 40 L 35.2 14 L 42.4 31.6 L 49.6 14 L 49.6 40" stroke="#F5B82E" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+</svg>
