@@ -13,10 +13,30 @@
  * Lancer : npm run test:e2e
  */
 import { chromium } from 'playwright';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envText = readFileSync(path.join(__dirname, '..', '..', '.env'), 'utf8');
+const env = Object.fromEntries(
+  envText
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'))
+    .map((l) => {
+      const i = l.indexOf('=');
+      return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^"|"$/g, '')];
+    }),
+);
 
 const BASE = process.env.GM_E2E_BASE || 'http://localhost:5173';
 const DEMO = { email: 'demo@godson-market.example', password: 'Demo1234!' };
-const ADMIN = { email: 'admin@godson-market.example', password: 'Admin1234!' };
+// Mot de passe admin volontairement dans .env (non commité) — voir .env.example.
+const ADMIN = {
+  email: env.GM_ADMIN_EMAIL || 'admin@godson-market.example',
+  password: env.GM_ADMIN_PASSWORD || 'Admin1234!',
+};
 
 const results = [];
 function check(name, ok, extra = '') {

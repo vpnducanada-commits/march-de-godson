@@ -37,8 +37,9 @@ if (!BASE || !KEY) {
 
 const DEMO_EMAIL = 'demo@godson-market.example';
 const DEMO_PASS = 'Demo1234!';
-const ADMIN_EMAIL = 'admin@godson-market.example';
-const ADMIN_PASS = 'Admin1234!';
+// Mot de passe admin volontairement dans .env (non commité) — voir .env.example.
+const ADMIN_EMAIL = env.GM_ADMIN_EMAIL || 'admin@godson-market.example';
+const ADMIN_PASS = env.GM_ADMIN_PASSWORD || 'Admin1234!';
 
 let passed = 0;
 let failed = 0;

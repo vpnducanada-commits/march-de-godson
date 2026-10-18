@@ -62,6 +62,8 @@ npm run test:e2e       # 23 assertions navigateur (Playwright) — nécessite `n
 - Les deux suites créent/consomment des données réelles : elles suppriment tout ce qu'elles
   créent (sauf l'utilisateur temporaire de la suite API, affiché en fin de run — sa
   suppression requiert du SQL : `delete from auth.users where id = '<id>';`).
+- Le **mot de passe admin** de l'environnement de test se définit dans `.env`
+  (`GM_ADMIN_EMAIL`, `GM_ADMIN_PASSWORD`) — jamais dans le code commité.
 
 ## Mise en production
 
