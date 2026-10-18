@@ -156,7 +156,8 @@ try {
   check('fiche annonce : bouton Appeler (tel:+241…)', (await callBtn.count()) >= 1);
   const waBtn = await d.locator('a[href*="wa.me/241601010101"]').count();
   check('fiche annonce : bouton WhatsApp (wa.me/241…)', waBtn >= 1);
-  const img = await d.locator('img').first().getAttribute('src').catch(() => '');
+  // Cible l'image principale de la fiche (pas le logo du header).
+  const img = await d.locator('.detail__main-img img').first().getAttribute('src').catch(() => '');
   check('fiche annonce : image chargée (svg démo)', /\/demo\//.test(img || ''), (img || '').slice(0, 60));
 
   await d.goto(BASE + '/publier', { waitUntil: 'networkidle', timeout: 30000 });

@@ -51,11 +51,16 @@ export const StaticContent: Record<'faq' | 'about' | 'security' | 'terms' | 'pri
       {
         heading: 'La marque',
         body: (
-          <p>
-            GODSON Marketplace est un projet de la marque <strong>Godson</strong>, conçu au
-            Gabon et pour le Gabon, avec une ambition : devenir la référence locale des
-            petites annonces, de manière fiable, simple et évolutive.
-          </p>
+          <>
+            <p>
+              GODSON Marketplace est un projet de la marque <strong>Godson</strong>, conçu au
+              Gabon et pour le Gabon, avec une ambition : devenir la référence locale des
+              petites annonces, de manière fiable, simple et évolutive.
+            </p>
+            <p className="static-section__credit">
+              Créé par <strong>Gédéon OKANA</strong> (alias <strong>Godson</strong>).
+            </p>
+          </>
         ),
       },
     ],

@@ -287,6 +287,15 @@ input, select, textarea {
   flex-shrink: 0;
 }
 
+/* Tuile du logo officiel (raster sur fond clair, arrondie) */
+.logo__mark {
+  background: #fdfdfd;
+  border-radius: 9px;
+  padding: 3px;
+  flex-shrink: 0;
+  display: block;
+}
+
 .logo-word {
   display: flex;
   flex-direction: column;
@@ -2247,6 +2256,21 @@ input, select, textarea {
   color: var(--text);
   line-height: 1.7;
   font-size: 14.5px;
+}
+
+/* Mention du créateur (page À propos) */
+.static-section__credit {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-left: 3px solid var(--gold);
+  background: var(--navy-050, rgba(10, 22, 51, 0.04));
+  border-radius: 0 10px 10px 0;
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--navy);
+}
+.static-section__credit strong {
+  font-weight: 700;
 }
 
 .static-section ul {

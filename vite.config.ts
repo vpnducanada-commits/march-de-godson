@@ -7,7 +7,15 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons/icon-192.png', 'icons/icon-512.png'],
+      includeAssets: [
+        'favicon.png',
+        'favicon.svg',
+        'logo.png',
+        'logo-symbol.png',
+        'og-image.png',
+        'icons/icon-192.png',
+        'icons/icon-512.png',
+      ],
       manifest: {
         name: 'GODSON Marketplace — Le marché gabonais, à portée de clic',
         short_name: 'Godson Market',

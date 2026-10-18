@@ -25,6 +25,23 @@ npm run icons          # régénère les icônes PWA (PNG sans dépendance)
 npm run demo-images    # régénère les visuels d'annonces de démonstration (SVG)
 ```
 
+## Logo & assets de marque
+
+Le logo officiel (fourni) est intégré partout :
+
+| Asset | Fichier | Usage |
+|---|---|---|
+| Symbole (tuile) | `public/logo-symbol.png` | Header, footer, page 404, favicon, icônes PWA |
+| Logo complet | `public/logo.png` | Partage, documentation, image OG |
+| Image de partage | `public/og-image.png` | Balises `og:image` / `twitter:image` |
+| Favicon + icônes | `public/favicon.png`, `public/icons/*` | Onglet, PWA (192/512/masquable/apple) |
+
+Les icônes PWA et le favicon sont dérivés du symbole (fond clair `#FDFDFD`).
+Pour remplacer le logo, il suffit de remplacer `logo.png` et `logo-symbol.png`
+(même ratio ~1:1) puis de régénérer les icônes — le composant `Logo` n'a pas
+à être modifié. La mention du créateur (« Créé par Gédéon OKANA (alias Godson) »)
+figure sur la page **À propos** (`src/pages/StaticPage.tsx`).
+
 ## Tests
 
 Deux suites, toutes deux branchées sur l'environnement Supabase de `.env` :

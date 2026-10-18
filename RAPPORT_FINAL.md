@@ -6,12 +6,12 @@
 
 ---
 
-## 1. Identité visuelle & logo GM — ✅ Fait et testé
+## 1. Identité visuelle & logo — ✅ Fait et testé
 
-- Monogramme GM (arc G + barre / M en polygone), géométrie commune entre `Logo.tsx`, `favicon.svg` et le générateur de PNG (scripts/zéro dépendance).
-- Palette : bleu nuit `#0A1633`, bleu `#2563EB`, jaune `#F5B82E` ; typographies Inter (texte) + Manrope (titres).
+- **Logo officiel (fourni, 18/10)** intégré partout : header, footer, page 404, favicon, icônes PWA et image de partage. Assets : `public/logo.png` (complet), `public/logo-symbol.png` (symbole, fond clair `#FDFDFD`), `public/og-image.png` (1200×630). Les icônes (192/512/masquable/apple, favicon 64) sont dérivées du symbole via `npm run brand-icons` (ImageMagick).
+- Palette extraite du logo : navy `#102948`, bleu `#0B5AB7`, or `#F5B82E` (image OG) ; le reste de l'app conserve bleu nuit `#0A1633`, bleu `#2563EB`, jaune `#F5B82E`. Typographies Inter (texte) + Manrope (titres).
 - Style éditorial premium minimaliste, pas d'emoji (bibliothèque `Icon` SVG interne), pas de boutons décoratifs.
-- Testé : rendu mobile 390 px et desktop 1280 px (smoke test 21/21), icônes PWA vérifiées visuellement.
+- Testé : logo affiché en header (mobile 390 px + desktop 1280 px), footer, 404 ; icônes vérifiées visuellement ; 0 erreur JS.
 
 ## 2. Schéma de données & migrations versionnées — ✅ Fait et testé
 
@@ -104,7 +104,8 @@ Batterie de tests REST exécutée ce jour (résultats) :
 ## 13. Pages statiques & 404 — ✅ Fait et testé
 
 - FAQ, À propos, Sécurité, Conditions, Confidentialité (contenus rédigés, cohérents avec v1 sans paiement), page 404 soignée.
-- Testé : 404 déclenchée et rendue proprement ; navigation depuis le footer.
+- **À propos (18/10)** : mention « Créé par **Gédéon OKANA** (alias **Godson**) » en encart doré dans la section « La marque ».
+- Testé : 404 déclenchée et rendue proprement ; navigation depuis le footer ; mention vérifiée en rendu.
 
 ## 14. Build, performance & préview — ✅ Fait et testé
 

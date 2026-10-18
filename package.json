@@ -11,6 +11,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "icons": "node scripts/generate-icons.mjs",
+    "brand-icons": "node scripts/generate-brand-icons.mjs",
     "demo-images": "node scripts/generate-demo-images.mjs",
     "test:api": "node tests/api.test.mjs",
     "test:e2e": "node tests/e2e/smoke.mjs",
