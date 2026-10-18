@@ -65,6 +65,10 @@ npm run test:e2e       # 23 assertions navigateur (Playwright) — nécessite `n
 - Le **mot de passe admin** de l'environnement de test se définit dans `.env`
   (`GM_ADMIN_EMAIL`, `GM_ADMIN_PASSWORD`) — jamais dans le code commité.
 
+## En ligne
+
+Production (Vercel) : **https://godson-marketplace.vercel.app**
+
 ## Mise en production
 
 Le repo est **zéro-config** pour les trois hébergeurs statiques gratuits (build, SPA,
