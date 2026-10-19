@@ -1,0 +1,68 @@
+# GODSON Marketplace — CI
+# Build (tsc strict + Vite) à chaque push/PR, puis tests API (Supabase réel)
+# et E2E (Playwright) quand les secrets de test sont configurés.
+#
+# Secrets requis dans GitHub → Settings → Secrets and variables → Actions :
+#   GM_ADMIN_EMAIL               compte admin de test (voir README « Comptes »)
+#   GM_ADMIN_PASSWORD            mot de passe de ce compte
+#   VITE_SUPABASE_PUBLISHABLE_KEY  clé publishable (publique) du projet Supabase
+# Sans ces secrets : le build est toujours vérifié, les tests sont sautés
+# (avec un avertissement visible dans le workflow).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VITE_SUPABASE_URL: https://uzzxtwaaqliwqjzudqjz.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_SITE_URL: https://godson-marketplace.vercel.app
+      GM_ADMIN_EMAIL: ${{ secrets.GM_ADMIN_EMAIL }}
+      GM_ADMIN_PASSWORD: ${{ secrets.GM_ADMIN_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Installation des dépendances
+        run: npm ci
+
+      - name: Build (tsc strict + Vite + sitemap)
+        run: npm run build
+
+      - name: Vérification des secrets de test
+        id: secrets-check
+        run: |
+          if [ -z "$GM_ADMIN_EMAIL" ] || [ -z "$GM_ADMIN_PASSWORD" ] || [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::warning::Secrets manquants (GM_ADMIN_EMAIL / GM_ADMIN_PASSWORD / VITE_SUPABASE_PUBLISHABLE_KEY) : les suites de tests sont sautées. Configurez-les dans GitHub → Settings → Secrets."
+            echo "has=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=%s\nVITE_SITE_URL=%s\nGM_ADMIN_EMAIL=%s\nGM_ADMIN_PASSWORD=%s\n' \
+            "$VITE_SUPABASE_URL" "$VITE_SUPABASE_PUBLISHABLE_KEY" "$VITE_SITE_URL" \
+            "$GM_ADMIN_EMAIL" "$GM_ADMIN_PASSWORD" > .env
+          echo "has=true" >> "$GITHUB_OUTPUT"
+
+      - name: Tests API / RLS / sécurité (Supabase)
+        if: steps.secrets-check.outputs.has == 'true'
+        run: npm run test:api
+
+      - name: Tests E2E (Playwright, navigateur réel)
+        if: steps.secrets-check.outputs.has == 'true'
+        run: |
+          npx playwright install --with-deps chromium
+          (npm run preview > /tmp/preview.log 2>&1 &)
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4173/ > /dev/null && break
+            sleep 2
+          done
+          GM_E2E_BASE=http://localhost:4173 npm run test:e2e

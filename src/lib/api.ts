@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+import { supabase, isSupabaseConfigured, publishableKey, supabaseUrl } from './supabase';
 import { normalizeText, escapeLike, slugify, randomSuffix } from './normalize';
 import {
   demoCategories,
@@ -137,6 +137,8 @@ export async function fetchListings(query: ListingQuery): Promise<PageResult> {
     .from('listings')
     .select(LISTING_SELECT, { count: 'exact' })
     .eq('status', 'active')
+    // Double sécurité avec la politique RLS : jamais d'annonce expirée au catalogue.
+    .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
 
@@ -492,6 +494,37 @@ export async function deleteListing(userId: string, slug: string, soft: boolean)
 }
 
 // ============================================================
+// EXPIRATION / REPRISE D'ANNONCE
+// ============================================================
+
+/**
+ * Reprend une annonce expirée : +90 jours de visibilité.
+ * Propriétaire (ou admin) uniquement, annonce active uniquement —
+ * contrôles refaits côté base par la RPC renew_listing.
+ */
+export async function renewListing(userId: string, slug: string): Promise<string> {
+  if (demoMode) return new Date(Date.now() + 90 * 86400000).toISOString();
+  const sb = requireClient();
+  const { data: row, error: selErr } = await sb
+    .from('listings')
+    .select('id, seller_id, status')
+    .eq('slug', slug)
+    .maybeSingle();
+  if (selErr || !row) throw new ApiError('Annonce introuvable.');
+  const r = row as { id: string; seller_id: string; status: string };
+  if (r.seller_id !== userId) throw new ApiError('Vous ne pouvez reprendre que vos propres annonces.');
+  const { data, error } = await sb.rpc('renew_listing', { p_listing_id: r.id });
+  if (error) throw toApiError(error, "La reprise de l'annonce a échoué.");
+  // PostgREST ≥12 enveloppe la valeur scalaire : { renew_listing: '…' }.
+  const value =
+    typeof data === 'string'
+      ? data
+      : ((data as { renew_listing?: string } | null)?.renew_listing ?? null);
+  if (!value) throw new ApiError("La reprise de l'annonce a échoué.");
+  return value;
+}
+
+// ============================================================
 // SIGNALEMENTS
 // ============================================================
 
@@ -500,15 +533,20 @@ export async function reportListing(
   listingId: string,
   reason: string,
   details: string,
-): Promise<void> {
+): Promise<string | null> {
   const sb = requireClient();
-  const { error } = await sb.from('reports').insert({
-    reporter_id: reporterId,
-    listing_id: listingId,
-    reason,
-    details: details || null,
-  });
+  const { data, error } = await sb
+    .from('reports')
+    .insert({
+      reporter_id: reporterId,
+      listing_id: listingId,
+      reason,
+      details: details || null,
+    })
+    .select('id')
+    .maybeSingle();
   if (error) throw toApiError(error, 'Le signalement n\u2019a pas pu être envoyé.');
+  return (data as { id: string } | null)?.id ?? null;
 }
 
 // ============================================================
@@ -681,4 +719,37 @@ export async function updateOwnProfile(userId: string, patch: Record<string, unk
   const sb = requireClient();
   const { error } = await sb.from('profiles').update(patch).eq('id', userId);
   if (error) throw toApiError(error, 'La mise à jour du profil a échoué.');
+}
+
+// ============================================================
+// NOTIFICATIONS E-MAIL (edge function « notify-email »)
+// Dégradé gracieux : si la clé Brevo n'est pas configurée côté
+// serveur, l'appel échoue silencieusement — l'expérience utilisateur
+// (modération, signalement) n'en dépend pas.
+// ============================================================
+
+export type EmailNotify =
+  | { kind: 'listing_status'; listingId: string; status: 'active' | 'refused' | 'archived' }
+  | { kind: 'report_created'; reportId: string };
+
+/**
+ * Déclenche un e-mail transactionnel. Retourne false sans lever d'erreur
+ * quand le service mail est indisponible (mode démo, clé absente, 5xx).
+ */
+export async function notifyEmail(token: string, notify: EmailNotify): Promise<boolean> {
+  if (demoMode) return false;
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/notify-email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: publishableKey ?? '',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(notify),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }

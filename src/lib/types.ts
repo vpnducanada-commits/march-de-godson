@@ -54,6 +54,19 @@ export interface Listing {
   status: ListingStatus;
   created_at: string;
   updated_at: string;
+  /** Échéance de l'annonce (null/absente en mode démo : pas d'expiration). */
+  expires_at?: string | null;
+}
+
+/** Une annonce active est-elle expirée (masquée du public, reprenable par son vendeur) ? */
+export function isListingExpired(listing: Pick<Listing, 'expires_at'>): boolean {
+  return Boolean(listing.expires_at) && new Date(listing.expires_at as string).getTime() < Date.now();
+}
+
+/** Jours restants avant expiration (négatif si expirée). */
+export function daysUntilExpiry(listing: Pick<Listing, 'expires_at'>): number | null {
+  if (!listing.expires_at) return null;
+  return Math.ceil((new Date(listing.expires_at).getTime() - Date.now()) / 86400000);
 }
 
 export interface ListingImage {

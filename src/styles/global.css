@@ -1748,6 +1748,11 @@ input, select, textarea {
   color: var(--text-2);
 }
 
+.status-badge--expired {
+  background: var(--amber-bg);
+  color: #92400e;
+}
+
 /* ============ Onglets ============ */
 
 .tabs {

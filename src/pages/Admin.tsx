@@ -12,6 +12,7 @@ import {
   adminFetchReports,
   adminFetchUsers,
   adminModerateListing,
+  notifyEmail,
   adminUpdateReport,
   adminSetUserBanned,
   adminPromoteToAdmin,
@@ -101,6 +102,12 @@ export default function Admin() {
     try {
       await adminModerateListing(id, status, session.user.id, action);
       toast('success', 'Statut de l\'annonce mis à jour.');
+      // E-mail au vendeur (silencieux si le service mail n'est pas configuré).
+      void notifyEmail(session.access_token, {
+        kind: 'listing_status',
+        listingId: id,
+        status: status as 'active' | 'refused' | 'archived',
+      }).catch(() => undefined);
       loadListings();
     } catch (e) {
       toast('error', e instanceof Error ? e.message : 'Action impossible.');

@@ -161,7 +161,12 @@ const myIns = await api('/rest/v1/listings', {
   },
 });
 check('rls : utilisateur crée sa propre annonce', myIns.status === 201 || myIns.status === 200, `status=${myIns.status}`);
-const myListing = (myIns.json || [])[0] || null;
+let myListing = (myIns.json || [])[0] || null;
+// Si le corps de la réponse ne contient pas la ligne (PostgREST), on la relit.
+if (!myListing?.id) {
+  const sel = await api(`/rest/v1/listings?select=id&slug=eq.${mySlug}`, { token: temp.access_token });
+  myListing = (sel.json || [])[0] || null;
+}
 
 // annonce du démo
 const demoL = await api('/rest/v1/listings?select=id&slug=eq.demo-iphone-13-pro');
@@ -255,6 +260,59 @@ const delOwn = await fetch(`${BASE}/storage/v1/object/listing-images/${myPath}`,
   headers: { apikey: KEY, Authorization: `Bearer ${temp.access_token}` },
 });
 check('storage : suppression de son propre fichier OK', delOwn.status === 200, `status=${delOwn.status}`);
+
+// ---------- EXPIRATION / REPRISE ----------
+// L'annonce temporaire a été créée à l'instant : expires_at ≈ création + 90 jours.
+const myExp = await api(`/rest/v1/listings?select=expires_at,created_at&slug=eq.${mySlug}`, { token: temp.access_token });
+const myExpRow = (myExp.json || [])[0];
+let expInDays = 0;
+if (myExpRow?.expires_at) {
+  expInDays = (new Date(myExpRow.expires_at).getTime() - new Date(myExpRow.created_at).getTime()) / 86400000;
+}
+check('expiration : expires_at ≈ 90 jours après la création', Boolean(myExpRow?.expires_at) && expInDays > 89 && expInDays < 91, `${expInDays.toFixed(1)} j`);
+
+// L'admin peut forcer l'expiration (droit de modération).
+const expForce = await api(`/rest/v1/listings?slug=eq.${mySlug}`, {
+  token: adminTok,
+  method: 'PATCH',
+  body: { expires_at: new Date(Date.now() - 86400000).toISOString() },
+});
+check('expiration : admin peut forcer l\'échéance', expForce.status === 204, `status=${expForce.status}`);
+
+// Un utilisateur (même authentifié) ne peut pas forcer l'expiration d'une annonce d'un tiers.
+const expCross = await api(`/rest/v1/listings?slug=eq.demo-iphone-13-pro`, {
+  token: temp.access_token,
+  method: 'PATCH',
+  body: { expires_at: new Date(Date.now() - 86400000).toISOString() },
+});
+check('rls : forçage de l\'échéance d\'une annonce d\'un tiers refusé', (expCross.json || []).length === 0, `${(expCross.json || []).length} ligne(s) touchée(s)`);
+
+// L'annonce expirée disparaît du catalogue public…
+const pubGone = await api(`/rest/v1/listings?select=id&slug=eq.${mySlug}&status=eq.active`);
+check('rls : annonce expirée masquée du catalogue public', (pubGone.json || []).length === 0, `${(pubGone.json || []).length} ligne(s) visible(s)`);
+
+// …mais le propriétaire la voit toujours (pour la reprendre).
+const ownerStill = await api(`/rest/v1/listings?select=id&slug=eq.${mySlug}`, { token: temp.access_token });
+check('rls : propriétaire voit toujours son annonce expirée', (ownerStill.json || []).length === 1, `${(ownerStill.json || []).length} ligne(s)`);
+
+// Reprise par le propriétaire via la RPC.
+const renew = await api('/rest/v1/rpc/renew_listing', {
+  token: temp.access_token,
+  method: 'POST',
+  body: { p_listing_id: myListing?.id },
+});
+// La valeur scalaire (timestamptz) arrive en JSON brut, éventuellement
+// enveloppée : { renew_listing: '…' } selon la version de PostgREST.
+const newExp = typeof renew.json === 'string' ? renew.json : renew.json?.renew_listing;
+check('expiration : reprise par le propriétaire (RPC renew_listing)', renew.status === 200 && typeof newExp === 'string' && new Date(newExp).getTime() > Date.now() + 80 * 86400000, `status=${renew.status}, nouvelle échéance=${newExp ?? JSON.stringify(renew.json).slice(0, 80)}`);
+
+// Reprise d'une annonce d'un tiers : refusée.
+const renewCross = await api('/rest/v1/rpc/renew_listing', {
+  token: temp.access_token,
+  method: 'POST',
+  body: { p_listing_id: demoLId },
+});
+check('rls : reprise d\'une annonce d\'un tiers refusée', renewCross.status === 400, `status=${renewCross.status}`);
 
 // ---------- NETTOYAGE ----------
 const delFav = await api(`/rest/v1/favorites?user_id=eq.${tempId}`, { token: temp.access_token, method: 'DELETE' });

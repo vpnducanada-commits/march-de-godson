@@ -6,10 +6,10 @@ import { Spinner } from '../components/ui/Spinner';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { deleteListing, fetchSellerListings, updateListing } from '../lib/api';
+import { deleteListing, fetchSellerListings, updateListing, renewListing } from '../lib/api';
 import type { ListingFull } from '../lib/types';
-import { STATUS_LABELS } from '../lib/types';
-import { formatFCFA, timeAgo } from '../lib/format';
+import { STATUS_LABELS, isListingExpired, daysUntilExpiry } from '../lib/types';
+import { formatFCFA, timeAgo, formatDate } from '../lib/format';
 import { usePageMeta } from '../hooks/usePageMeta';
 
 type Tab = 'active' | 'draft' | 'archived' | 'refused';
@@ -66,6 +66,20 @@ export default function Dashboard() {
         status: tab === 'archived' ? 'active' : 'archived',
       });
       toast('success', tab === 'archived' ? 'Annonce republiée.' : 'Annonce archivée.');
+      load();
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : 'Action impossible.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onRenew = async (item: ListingFull) => {
+    if (!session?.user) return;
+    setBusy(true);
+    try {
+      await renewListing(session.user.id, item.listing.slug);
+      toast('success', 'Annonce republiée : visible dans le catalogue pendant 90 jours.');
       load();
     } catch (e) {
       toast('error', e instanceof Error ? e.message : 'Action impossible.');
@@ -143,7 +157,10 @@ export default function Dashboard() {
 
       {!error && items && filtered.length > 0 && (
         <div className="manage-list">
-          {filtered.map((item) => (
+          {filtered.map((item) => {
+            const expired = item.listing.status === 'active' && isListingExpired(item.listing);
+            const days = daysUntilExpiry(item.listing);
+            return (
             <article key={item.listing.id} className="manage-item">
               <Link to={`/annonce/${item.listing.slug}`} className="manage-item__thumb">
                 <img src={item.images[0]} alt="" loading="lazy" />
@@ -153,14 +170,27 @@ export default function Dashboard() {
                   <Link to={`/annonce/${item.listing.slug}`} className="manage-item__title">
                     {item.listing.title}
                   </Link>
-                  <span className={`status-badge status-badge--${item.listing.status}`}>
-                    {STATUS_LABELS[item.listing.status]}
-                  </span>
+                  {expired ? (
+                    <span className="status-badge status-badge--expired">Expirée</span>
+                  ) : (
+                    <span className={`status-badge status-badge--${item.listing.status}`}>
+                      {STATUS_LABELS[item.listing.status]}
+                    </span>
+                  )}
                 </div>
                 <p className="manage-item__meta">
                   {item.category ? item.category.name : ''}
                   {item.city ? ` · ${item.city.name}` : ''} · {timeAgo(item.listing.created_at)}
                   {item.listing.price !== null ? ` · ${formatFCFA(item.listing.price)}` : ''}
+                  {item.listing.status === 'active' && item.listing.expires_at && (
+                    <>
+                      {' · '}
+                      {expired
+                        ? `Expirée le ${formatDate(item.listing.expires_at)}`
+                        : `Expire le ${formatDate(item.listing.expires_at)}`}
+                      {!expired && days !== null && days <= 14 ? ` (${days} j restants)` : ''}
+                    </>
+                  )}
                 </p>
               </div>
               <div className="manage-item__actions">
@@ -169,7 +199,12 @@ export default function Dashboard() {
                     <Icon name="pencil" size={14} /> Modifier
                   </Link>
                 )}
-                {item.listing.status === 'active' && (
+                {expired && (
+                  <button type="button" className="btn btn--gold btn--sm" onClick={() => onRenew(item)} disabled={busy}>
+                    <Icon name="refresh" size={14} /> Reprendre (90 j)
+                  </button>
+                )}
+                {item.listing.status === 'active' && !expired && (
                   <button type="button" className="btn btn--ghost btn--sm" onClick={() => onArchive(item)} disabled={busy}>
                     <Icon name="archive" size={14} /> Archiver
                   </button>
@@ -184,7 +219,8 @@ export default function Dashboard() {
                 </button>
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
       )}
 

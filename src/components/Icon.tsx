@@ -100,6 +100,12 @@ const PATHS: Record<string, ReactNode> = {
       <polyline points="12 6 12 12 16 14" />
     </>
   ),
+  refresh: (
+    <>
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <polyline points="21 3 21 9 15 9" />
+    </>
+  ),
   smartphone: (
     <>
       <rect width="14" height="20" x="5" y="2" rx="2" ry="2" />

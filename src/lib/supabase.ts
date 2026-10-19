@@ -22,3 +22,7 @@ export const supabase: SupabaseClient | null =
     : null;
 
 export const isSupabaseConfigured = supabase !== null;
+
+/** Clé publishable (publique) — nécessaire pour appeler les edge functions. */
+export const publishableKey: string | undefined = key;
+export const supabaseUrl: string | undefined = url;

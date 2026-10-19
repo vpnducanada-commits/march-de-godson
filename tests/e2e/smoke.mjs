@@ -180,6 +180,24 @@ try {
   const img = await d.locator('.detail__main-img img').first().getAttribute('src').catch(() => '');
   check('fiche annonce : image chargée (svg démo)', /\/demo\//.test(img || ''), (img || '').slice(0, 60));
 
+  // JSON-LD (SEO) : données structurées sur la fiche annonce.
+  const ldTypes = await d.evaluate(() =>
+    Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
+      .map((s) => { try { return JSON.parse(s.textContent)['@type']; } catch { return null; } }),
+  );
+  check(
+    'JSON-LD : Product + BreadcrumbList + Organization présents',
+    ldTypes.includes('Product') && ldTypes.includes('BreadcrumbList') && ldTypes.includes('Organization'),
+    (ldTypes || []).filter(Boolean).join(', '),
+  );
+  const ldProduct = await d.evaluate(() => {
+    const s = Array.from(document.querySelectorAll('script[type="application/ld+json"]')).find(
+      (x) => (x.textContent || '').includes('"Product"'),
+    );
+    try { return JSON.parse(s.textContent); } catch { return null; }
+  });
+  check('JSON-LD : prix en XAF dans le schema Product', ldProduct?.offers?.priceCurrency === 'XAF', String(ldProduct?.offers?.priceCurrency));
+
   await d.goto(BASE + '/publier', { waitUntil: 'networkidle', timeout: 30000 });
   await d.waitForTimeout(800);
   check('publication (anonyme) : redirection vers connexion', /connexion/.test(d.url()), d.url());

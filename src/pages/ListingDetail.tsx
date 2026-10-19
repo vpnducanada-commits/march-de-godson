@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/ui/Modal';
@@ -14,12 +14,15 @@ import {
   reportListing,
   toggleFavorite,
   fetchFavorites,
+  renewListing,
+  notifyEmail,
 } from '../lib/api';
 import type { ListingFull, Category } from '../lib/types';
-import { ACCOUNT_TYPE_LABELS, CONDITION_LABELS } from '../lib/types';
+import { ACCOUNT_TYPE_LABELS, CONDITION_LABELS, isListingExpired } from '../lib/types';
 import { formatFCFA, timeAgo } from '../lib/format';
 import { telLink, whatsappLink } from '../lib/phone';
 import { usePageMeta } from '../hooks/usePageMeta';
+import { useJsonLd } from '../hooks/useJsonLd';
 
 const REPORT_REASONS = [
   'Produit ou service interdit / illégal',
@@ -32,13 +35,14 @@ const REPORT_REASONS = [
 
 export default function ListingDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const { session } = useAuth();
+  const { session, isAdmin } = useAuth();
   const { toast } = useToast();
   const [item, setItem] = useState<ListingFull | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [activeImg, setActiveImg] = useState(0);
   const [isFav, setIsFav] = useState(false);
   const [favBusy, setFavBusy] = useState(false);
+  const [renewBusy, setRenewBusy] = useState(false);
   const [sellerItems, setSellerItems] = useState<ListingFull[]>([]);
   const [parentCat, setParentCat] = useState<Category | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
@@ -47,26 +51,42 @@ export default function ListingDetail() {
   const [reportBusy, setReportBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    setActiveImg(0);
+  const loadListing = useCallback(() => {
+    if (!slug) return;
     setItem(undefined);
     setError(null);
-    if (!slug) return;
     fetchListingBySlug(slug)
       .then((r) => {
-        if (r && r.listing.status !== 'active') {
+        if (!r) {
+          setError("Cette annonce est introuvable ou n'est plus disponible.");
+          return;
+        }
+        if (r.listing.status !== 'active') {
+          setError("Cette annonce n'est plus disponible.");
+          return;
+        }
+        // Expirée : invisible au public (RLS), mais le propriétaire et les
+        // admins la voient pour la reprendre.
+        const expired = isListingExpired(r.listing);
+        const privileged = session?.user.id === r.listing.seller_id || isAdmin;
+        if (expired && !privileged) {
           setError("Cette annonce n'est plus disponible.");
           return;
         }
         setItem(r);
-        if (r) {
+        if (!expired) {
           fetchSellerListings(r.listing.seller_id, { pageSize: 4, status: 'active' })
             .then((res) => setSellerItems(res.items.filter((i) => i.listing.slug !== r.listing.slug)))
             .catch(() => undefined);
         }
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Annonce introuvable.'));
-  }, [slug]);
+  }, [slug, session, isAdmin]);
+
+  useEffect(() => {
+    setActiveImg(0);
+    loadListing();
+  }, [loadListing]);
 
   useEffect(() => {
     if (!item || !session) return;
@@ -95,6 +115,68 @@ export default function ListingDetail() {
     item ? `${item.listing.description.slice(0, 150)}${item.listing.description.length > 150 ? '…' : ''}` : undefined,
     item?.images[0],
   );
+
+  // JSON-LD « Product » : résultats enrichis Google (prix FCFA, photos, vendeur).
+  const ldProduct = useMemo(() => {
+    if (!item) return null;
+    const origin = window.location.origin;
+    const abs = (u: string) => (u.startsWith('http') ? u : `${origin}${u}`);
+    const { listing: l, seller } = item;
+    const url = `${origin}/annonce/${l.slug}`;
+    const offer: Record<string, unknown> = {
+      '@type': 'Offer',
+      url,
+      priceCurrency: l.currency || 'XAF',
+      availability: 'https://schema.org/InStock',
+    };
+    if (l.price !== null) offer.price = l.price;
+    if (l.condition) {
+      offer.itemCondition =
+        l.condition === 'neuf' ? 'https://schema.org/NewCondition' : 'https://schema.org/UsedCondition';
+    }
+    if (seller) {
+      offer.seller = {
+        '@type': l.seller_type === 'particulier' ? 'Person' : 'Organization',
+        name: seller.display_name || 'Vendeur GODSON Marketplace',
+      };
+    }
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: l.title,
+      description: l.description,
+      image: item.images.map(abs),
+      url,
+      offers: offer,
+    };
+  }, [item]);
+
+  // JSON-LD « BreadcrumbList » : fil d'Ariane pour Google.
+  const ldBreadcrumb = useMemo(() => {
+    if (!item) return null;
+    const origin = window.location.origin;
+    const crumbs: { name: string; item?: string }[] = [
+      { name: 'Accueil', item: `${origin}/` },
+      { name: 'Catalogue', item: `${origin}/annonces` },
+    ];
+    const crumbCat = parentCat ?? item.category;
+    if (crumbCat) crumbs.push({ name: crumbCat.name, item: `${origin}/annonces?cat=${crumbCat.slug}` });
+    if (item.subcategory) crumbs.push({ name: item.subcategory.name });
+    crumbs.push({ name: item.listing.title });
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: crumbs.map((c, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: c.name,
+        ...(c.item ? { item: c.item } : {}),
+      })),
+    };
+  }, [item, parentCat]);
+
+  useJsonLd('product', ldProduct);
+  useJsonLd('breadcrumb', ldBreadcrumb);
 
   const onFavorite = useCallback(async () => {
     if (!item) return;
@@ -145,7 +227,11 @@ export default function ListingDetail() {
     if (!item) return;
     setReportBusy(true);
     try {
-      await reportListing(session.user.id, item.listing.id, reportReason, reportDetails);
+      const reportId = await reportListing(session.user.id, item.listing.id, reportReason, reportDetails);
+      // Alerte e-mail à l'équipe de modération (silencieux si non configuré).
+      if (reportId) {
+        void notifyEmail(session.access_token, { kind: 'report_created', reportId }).catch(() => undefined);
+      }
       toast('success', 'Signalement transmis. Merci, notre équipe va examiner la demande.');
       setReportOpen(false);
       setReportDetails('');
@@ -171,6 +257,47 @@ export default function ListingDetail() {
   if (!item) return <Spinner label="Chargement de l'annonce…" />;
 
   const { listing, category, subcategory, city, seller } = item;
+
+  // ——— Annonce expirée : panneau dédié (propriétaire / admin) ———
+  const isOwner = session?.user.id === listing.seller_id;
+  const onRenew = async () => {
+    if (!session?.user || renewBusy) return;
+    setRenewBusy(true);
+    try {
+      await renewListing(session.user.id, listing.slug);
+      toast('success', 'Annonce republiée : elle est visible dans le catalogue pendant 90 jours.');
+      loadListing();
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : "La reprise de l'annonce a échoué.");
+    } finally {
+      setRenewBusy(false);
+    }
+  };
+  if (isListingExpired(listing)) {
+    return (
+      <div className="container">
+        <EmptyState
+          icon="clock"
+          title="Annonce expirée"
+          message={
+            isOwner || isAdmin
+              ? 'Cette annonce a atteint la fin de sa période de visibilité (90 jours). Reprenez-la gratuitement pour la remettre en ligne dans le catalogue.'
+              : "Cette annonce a expiré et n'est plus disponible."
+          }
+          action={
+            isOwner || isAdmin ? (
+              <button type="button" className="btn btn--gold" onClick={onRenew} disabled={renewBusy}>
+                <Icon name="refresh" size={16} /> {renewBusy ? 'Reprise en cours…' : 'Reprendre l’annonce (90 jours)'}
+              </button>
+            ) : (
+              <Link to="/annonces" className="btn btn--primary">Retour au catalogue</Link>
+            )
+          }
+        />
+      </div>
+    );
+  }
+
   const price = formatFCFA(listing.price);
   const wa = whatsappLink(listing.contact_whatsapp, `Bonjour, je suis intéressé par votre annonce « ${listing.title} » sur GODSON Marketplace.`);
   const tel = telLink(listing.contact_phone || listing.contact_whatsapp);

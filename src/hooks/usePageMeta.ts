@@ -1,6 +1,12 @@
 import { useEffect } from 'react';
 
-const SITE_URL: string = import.meta.env.VITE_SITE_URL || window.location.origin;
+/**
+ * Domaine de référence : `VITE_SITE_URL` si défini (build), sinon le domaine
+ * réel du navigateur. L'URL canonique est toujours calculée à l'exécution
+ * (window.location.origin) : elle reste correcte quel que soit le domaine
+ * de publication (vercel.app → domaine personnalisé), sans rebuild.
+ */
+const SITE_URL: string = import.meta.env.VITE_SITE_URL || 'https://godson-marketplace.vercel.app';
 
 /** Image de partage social par défaut (générée à la racine du site). */
 export const DEFAULT_OG_IMAGE = `${SITE_URL}/og-image.png`;
@@ -41,7 +47,10 @@ export function usePageMeta(title: string, description?: string, ogImage?: strin
     setMeta('property', 'og:image', img);
 
     // URL canonique + og:url : une URL officielle par page (SEO anti-doublons).
-    const canonical = `${SITE_URL}${window.location.pathname}`;
+    // Toujours calculée sur le domaine réel de consultation : correct sur
+    // godson-marketplace.vercel.app aujourd'hui comme sur le futur domaine
+    // personnalisé, sans re-build.
+    const canonical = `${window.location.origin}${window.location.pathname}`;
     let link = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
     if (!link) {
       link = document.createElement('link');
