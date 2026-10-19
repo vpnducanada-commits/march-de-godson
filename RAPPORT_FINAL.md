@@ -277,7 +277,7 @@ sans aucun impact pour les vrais utilisateurs.
 ---
 
 ### Ce qui est immédiatement utilisable
-- **Site en production** : https://godson-marketplace.vercel.app — **v1.4 en ligne**, PWA
+- **Site en production** : https://godson-marketplace.vercel.app — **v1.6 en ligne**, PWA
   installable (service worker vérifié), analytics actif, données structurées SEO sur chaque
   fiche, messagerie temps réel, badge e-mail vérifié, quota 20 annonces, export CSV admin.
 - Base saine : 10 annonces démo labellisées, comptes démo + admin fonctionnels.
