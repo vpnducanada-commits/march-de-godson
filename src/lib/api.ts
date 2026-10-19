@@ -854,7 +854,9 @@ type RealtimeChannel = ReturnType<ReturnType<typeof requireClient>['channel']>;
 // Registres module-level : les callbacks de canal y distribuent les messages,
 // ce qui permet de réutiliser un canal existant sans jamais appeler .on()
 // après subscribe() (interdit par Supabase Realtime).
-const globalMsgListeners = new Set<(m: Message) => void>();
+// Listeners globaux « il y a eu de l'activité en messagerie » (nouveaux messages
+// OU nouvelles conversations) : les abonnés se contentent de rafraîchir.
+const globalActivityListeners = new Set<() => void>();
 let globalMsgChannel: RealtimeChannel | null = null;
 const convListeners = new Map<string, Set<(m: Message) => void>>();
 const convChannels = new Map<string, RealtimeChannel>();
@@ -870,6 +872,16 @@ function dispatch(listeners: Set<(m: Message) => void> | undefined, m: Message, 
   });
 }
 
+function fireGlobal(ctx: string): void {
+  globalActivityListeners.forEach((fn) => {
+    try {
+      fn();
+    } catch (err) {
+      console.error(`Erreur listener messagerie (${ctx})`, err);
+    }
+  });
+}
+
 function ensureGlobalChannel(sb: ReturnType<typeof requireClient>): void {
   if (globalMsgChannel && sb.realtime.channels.includes(globalMsgChannel)) return;
   // Un canal du même topic existe déjà (fermeture en attente, StrictMode, etc.) :
@@ -879,10 +891,15 @@ function ensureGlobalChannel(sb: ReturnType<typeof requireClient>): void {
     globalMsgChannel = existing;
     return;
   }
+  // Nouveaux messages ET nouvelles conversations : le vendeur voit apparaître la
+  // conversation dès son ouverture, même avant le premier message.
   globalMsgChannel = sb
     .channel('messages:global')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) =>
-      dispatch(globalMsgListeners, payload.new as Message, 'global'),
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () =>
+      fireGlobal('global messages'),
+    )
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'conversations' }, () =>
+      fireGlobal('global conversations'),
     )
     .subscribe();
 }
@@ -924,15 +941,19 @@ export function subscribeToConversation(
   };
 }
 
-/** Abonnement temps réel global (badge « non lus » du header, liste de la page Messages). Retourne le désabonnement. */
-export function subscribeToNewMessages(onAny: (m: Message) => void): () => void {
+/**
+ * Abonnement temps réel global : déclenché à chaque nouvelle activité
+ * (nouveau message OU nouvelle conversation). Alimente le badge « non lus »
+ * du header et la liste de la page Messages. Retourne le désabonnement.
+ */
+export function subscribeToNewMessages(onActivity: () => void): () => void {
   if (demoMode) return () => undefined;
   const sb = requireClient();
   ensureGlobalChannel(sb);
-  globalMsgListeners.add(onAny);
+  globalActivityListeners.add(onActivity);
   return () => {
-    globalMsgListeners.delete(onAny);
-    if (globalMsgListeners.size === 0 && globalMsgChannel && sb.realtime.channels.includes(globalMsgChannel)) {
+    globalActivityListeners.delete(onActivity);
+    if (globalActivityListeners.size === 0 && globalMsgChannel && sb.realtime.channels.includes(globalMsgChannel)) {
       void sb.removeChannel(globalMsgChannel);
       globalMsgChannel = null;
     }
