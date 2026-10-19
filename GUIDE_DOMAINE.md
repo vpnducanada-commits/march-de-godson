@@ -3,8 +3,14 @@
 > **Contexte (vérifié le 19/10/2026) :** `godsonmarket.com` est **réservé** au site
 > « Green Mask Stick | Bénin » (déjà configuré chez Namecheap, à ne pas toucher).
 > La marketplace a besoin de **son propre domaine**.
-> **Domaine recommandé : `godsonmarketplace.com`** (vérifié libre le 19/10/2026).
-> Alternative : `marchegodson.com` (également libre).
+>
+> **Deux options :**
+> - **Gratuit (0 $)** : `godsonmarketplace.fr.eu.org` — **déjà enregistré sur Vercel ✓** —
+>   voir **`GUIDE_DOMAINE_EU_ORG.md`** (attention : e-mail non-Gmail requis, validation
+>   humaine en quelques jours).
+> - **Payant (~12 $/an)** : `godsonmarketplace.com` (vérifié libre le 19/10/2026),
+>   immédiat — procédure ci-dessous.
+> Alternative payante : `marchegodson.com` (également libre).
 
 ## Étape 1 — Acheter le domaine (10–15 $/an)
 
