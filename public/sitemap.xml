@@ -4,6 +4,7 @@
   <url><loc>https://godson-marketplace.vercel.app/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
   <url><loc>https://godson-marketplace.vercel.app/annonces</loc><changefreq>daily</changefreq><priority>0.9</priority></url>
   <url><loc>https://godson-marketplace.vercel.app/publier</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://godson-marketplace.vercel.app/application</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://godson-marketplace.vercel.app/faq</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
   <url><loc>https://godson-marketplace.vercel.app/apropos</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
   <url><loc>https://godson-marketplace.vercel.app/securite</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>

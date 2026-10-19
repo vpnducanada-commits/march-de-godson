@@ -191,6 +191,9 @@ export function Header() {
               {unread > 0 ? `Messages (${unread})` : 'Messages'}
             </NavLink>
           )}
+          <NavLink to="/application" onClick={() => setMenuOpen(false)}>
+            <Icon name="download" size={18} /> Télécharger l'application
+          </NavLink>
           <NavLink to="/faq" onClick={() => setMenuOpen(false)}>
             <Icon name="info" size={18} /> Aide & FAQ
           </NavLink>

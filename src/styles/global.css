@@ -1452,6 +1452,278 @@ input, select, textarea {
   }
 }
 
+/* ============ Téléchargement de l'application ============ */
+
+.download {
+  padding-top: 28px;
+  padding-bottom: 48px;
+}
+
+.download__grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: 1.4fr 1fr;
+  align-items: stretch;
+}
+
+.download__main {
+  padding: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.download__brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.download__brand img {
+  border-radius: 18px;
+  box-shadow: var(--shadow-md);
+}
+
+.download__name {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--navy);
+  margin: 0;
+}
+
+.download__meta {
+  font-size: 13px;
+  color: var(--text-2);
+  margin: 2px 0 0;
+}
+
+.download__hint {
+  display: flex;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-2);
+  background: var(--blue-bg);
+  border-radius: 10px;
+  padding: 12px 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.download__hint svg {
+  color: var(--blue);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.download__state {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--green-bg);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 14px;
+}
+
+.download__state svg {
+  color: var(--green);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.download__state-title {
+  font-weight: 700;
+  color: var(--navy);
+  margin: 0;
+}
+
+.download__state-body {
+  color: var(--text-2);
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+
+.download__points {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.download__points li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.download__points svg {
+  color: var(--gold-dark);
+  flex-shrink: 0;
+}
+
+.download__qr {
+  padding: 26px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.download__qr-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 0;
+}
+
+.download__qr-frame {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.download__qr-img {
+  display: block;
+  border-radius: 4px;
+}
+
+.download__qr-fallback {
+  width: 240px;
+  height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.download__qr-body {
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.download__steps-title {
+  margin: 34px 0 14px;
+}
+
+.download__platforms {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.download__platform {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.download__platform-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--blue-bg);
+  color: var(--blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.download__platform-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 0;
+}
+
+.download__platform-body {
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.download__platform-body svg {
+  vertical-align: -2px;
+}
+
+.download__note {
+  margin-top: 26px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.6;
+  max-width: 720px;
+}
+
+@media (max-width: 899px) {
+  .download__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .download__platforms {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Bandeau d'installation (PWA) — proposé discrètement sur les navigateurs
+   qui émettent « beforeinstallprompt ». */
+.install-banner {
+  background: var(--navy);
+  color: #fff;
+}
+
+.install-banner__inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  font-size: 13.5px;
+}
+
+.install-banner__icon {
+  color: var(--gold);
+  flex-shrink: 0;
+}
+
+.install-banner__text {
+  flex: 1;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.install-banner__text strong {
+  color: #fff;
+}
+
+.install-banner__close {
+  color: rgba(255, 255, 255, 0.6);
+  background: none;
+  border: none;
+  padding: 6px;
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.install-banner__close:hover {
+  color: #fff;
+}
+
+@media (max-width: 639px) {
+  .install-banner__text span {
+    display: none;
+  }
+}
+
 /* ============ Formulaires ============ */
 
 .page-title {

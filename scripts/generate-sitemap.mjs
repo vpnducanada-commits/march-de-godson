@@ -73,6 +73,7 @@ const mainPages = [
   { loc: '/', changefreq: 'daily', priority: '1.0' },
   { loc: '/annonces', changefreq: 'daily', priority: '0.9' },
   { loc: '/publier', changefreq: 'monthly', priority: '0.7' },
+  { loc: '/application', changefreq: 'monthly', priority: '0.6' },
   { loc: '/faq', changefreq: 'yearly', priority: '0.4' },
   { loc: '/apropos', changefreq: 'yearly', priority: '0.4' },
   { loc: '/securite', changefreq: 'yearly', priority: '0.3' },

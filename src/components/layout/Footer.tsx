@@ -18,6 +18,7 @@ export function Footer() {
         <nav className="footer__col" aria-label="Plateforme">
           <h4 className="footer__h">Plateforme</h4>
           <Link to="/apropos">À propos</Link>
+          <Link to="/application">Télécharger l'application</Link>
           <Link to="/faq">Comment ça marche</Link>
           <Link to="/publier">Publier une annonce</Link>
           <Link to="/securite">Conseils de sécurité</Link>
