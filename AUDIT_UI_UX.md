@@ -213,15 +213,17 @@ Ajouts v1.6 :
 **Validation prod v1.6 :** page `/application` OK (QR rendu, 0 erreur JS), test-final 6/6,
 poids transfert 0,64 Mo.
 
-## 8. Recommandations (non implémentées, pour la suite)
+## 8. Recommandations — suivi
 
-1. **Skeletons** pour « Annonces récentes » et « Catégories » au lieu du spinner centré
-   (perception de chargement encore meilleure ; le spinner actuel est honnête mais neutre).
-2. **Formulaire de contact** (page /contact) : la section « Contact » du footer pointe vers le
-   bouton « Signaler » ; un vrai formulaire + e-mail Brevo (§26) complèterait le parcours.
-3. **Fiche annonce** : la galerie mono-image pourrait afficher un placeholder « aucune photo »
-   plus explicite pour les annonces sans image.
-4. **PWA sur appareil réel** (§26) : reste à tester l'installation sur un téléphone Gabon (data).
+1. ✅ **Fait en v1.8** : squelettes de chargement (shimmer, même gabarit que le contenu final,
+   sans saut de mise en page) sur l'accueil (catégories + annonces récentes) et le catalogue ;
+   + bandeau « hors ligne » pour la PWA (l'app shell reste consultable, le bandeau l'indique).
+2. **En attente de Brevo (§26)** : formulaire de contact (page /contact) — un vrai formulaire
+   sans fournisseur d'e-mails resterait une fonctionnalité morte, donc volontairement absent.
+3. ✅ **Vérifié déjà conforme** : les annonces sans image affichent le placeholder
+   « Pas d'image » explicite (`/demo/placeholder.svg`).
+4. **PWA sur appareil réel** (§26) : reste à tester l'installation sur un téléphone Gabon (data) —
+   la page `/application` + QR code facilite maintenant ce test.
 
 ---
 
