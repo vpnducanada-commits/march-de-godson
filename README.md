@@ -1,5 +1,7 @@
 # GODSON Marketplace
 
+[![CI](https://github.com/vpnducanada-commits/march-de-godson/actions/workflows/ci.yml/badge.svg)](https://github.com/vpnducanada-commits/march-de-godson/actions/workflows/ci.yml)
+
 Petites annonces et marketplace pour le Gabon — français, FCFA (XAF), localités gabonaises,
 contact direct vendeur/acheteur (pas de paiement en ligne en v1).
 
@@ -47,9 +49,9 @@ figure sur la page **À propos** (`src/pages/StaticPage.tsx`).
 Deux suites, toutes deux branchées sur l'environnement Supabase de `.env` :
 
 ```bash
-npm run test:api       # 34 assertions API / RLS / sécurité (Node, zéro dépendance)
+npm run test:api       # 41 assertions API / RLS / sécurité (Node, zéro dépendance)
 npm run test:e2e:install   # une fois : télécharge Chromium
-npm run test:e2e       # 23 assertions navigateur (Playwright) — nécessite `npm run dev`
+npm run test:e2e       # 25 assertions navigateur (Playwright) — nécessite `npm run dev`
 ```
 
 - `tests/api.test.mjs` — auth (login démo/admin, refus de mauvais mot de passe), données,
@@ -68,6 +70,33 @@ npm run test:e2e       # 23 assertions navigateur (Playwright) — nécessite `n
 ## En ligne
 
 Production (Vercel) : **https://godson-marketplace.vercel.app**
+
+Guide domaine gratuit (eu.org) : voir [`GUIDE_DOMAINE_EU_ORG.md`](GUIDE_DOMAINE_EU_ORG.md).
+
+## v1.3 — Améliorations (19/10/2026)
+
+| Fonctionnalité | Détail |
+|---|---|
+| **Expiration des annonces (90 j)** | Migration 006 : colonne `expires_at` ; annonce expirée masquée du catalogue public (RLS) mais visible par son vendeur ; **reprise gratuite de 90 jours** via la RPC `renew_listing` (badge « Expirée » + échéance dans l'espace vendeur, panneau dédié sur la fiche) |
+| **SEO — données structurées** | JSON-LD `Product` (prix XAF, photos, vendeur, état) + `BreadcrumbList` sur chaque fiche, `Organization` en tête de site → éligible aux résultats enrichis Google |
+| **Mesures** | **Vercel Analytics** (performances + erreurs, sans cookie, gratuit) actif en production ; **Sentry** prêt à l'emploi — ajouter un `VITE_SENTRY_DSN` (compte gratuit) sur Vercel et les erreurs JS remontent (chunk dynamique : 0 Ko tant que non configuré) |
+| **E-mails transactionnels** | Edge function `notify-email` (Brevo, plan gratuit 300/j) : annonce publiée/refusée/archivée → e-mail au vendeur ; nouveau signalement → e-mail à l'admin. JWT vérifié, service_role côté serveur, destinataires lus en base (jamais fournis par le client). Sans clé Brevo : 503 silencieux, le site fonctionne normalement |
+| **CI GitHub Actions** | `.github/workflows/ci.yml` : build (tsc strict + Vite) à chaque push/PR, puis tests API + E2E quand les secrets sont configurés (voir ci-dessous) |
+
+**Activer les tests en CI** — GitHub → repo → *Settings → Secrets and variables → Actions* :
+
+| Secret | Valeur |
+|---|---|
+| `GM_ADMIN_EMAIL` | compte admin de test (voir section Comptes) |
+| `GM_ADMIN_PASSWORD` | son mot de passe |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | clé publishable du projet Supabase (publique) |
+
+**Activer les e-mails** — 5 minutes, gratuit :
+1. Créer un compte sur [brevo.com](https://www.brevo.com) (plan Starter, 300 e-mails/jour, sans carte)
+2. Dans Brevo : *Senders & Domaines* → ajouter l'adresse expéditrice (ex. `contact@votre-domaine`) + vérifier le SPF
+3. *SMTP & API* → créer une clé API
+4. Sur Supabase : *Edge Functions → notify-email → Secrets* → ajouter `BREVO_API_KEY` et `MAIL_FROM`
+5. C'est tout — la fonction passe de 503 à actif, les e-mails partent automatiquement
 
 ## Mise en production
 

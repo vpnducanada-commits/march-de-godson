@@ -1,6 +1,7 @@
 # GODSON Marketplace — Rapport final de livraison
 
-**Date** : 18 octobre 2026
+**Date** : 18 octobre 2026 — **mise à jour v1.3 le 19 octobre 2026**
+**Production** : https://godson-marketplace.vercel.app (en ligne depuis le 18/10, v1.3 le 19/10)
 **Projet Supabase** : `uzzxtwaaqliwqjzudqjz` (`https://uzzxtwaaqliwqjzudqjz.supabase.co`)
 **Légende** : ✅ Fait et testé · ✔️ Fait (vérifié par build/inspection, pas de test d'usage) · 🔧 Preparé (prêt, en attente d'un acte extérieur : domaine, compte, import…)
 
@@ -123,14 +124,79 @@ Batterie de tests REST exécutée ce jour (résultats) :
 - **Limites v1 assumées** :
   1. Pas de paiement en ligne (contact direct — par décision de v1).
   2. Pas d'IA de classement (les annonces sont triées par recence/prix uniquement — aucun « boost » simulé).
-  3. E-mail de transaction non testé en production (l'auto-confirmation est activée, donc aucun e-mail bloquant ; les liens de mot de passe oublié dépendront du domaine final).
+  3. E-mails transactionnels **prêts mais non actifs** : edge function déployée et testée
+     (401/503 propres), en attente d'une clé Brevo gratuite (item 20). L'auto-confirmation
+     Supabase reste activée, donc aucun e-mail bloquant ; les liens de mot de passe oublié
+     dépendront du domaine final.
   4. Libre tier Supabase : 500 Mo de base, 1 Go de stockage, pause après 1 an d'inactivité — suffisant pour la v1 ; au-delà, un plan payant sera nécessaire (signalé, aucun prix inventé).
-  5. ~~Tests~~ → **Fait (18/10)** : suite de tests automatisée intégrée au repo — `npm run test:api` (34 assertions API/RLS/sécurité, zéro dépendance) et `npm run test:e2e` (23 assertions navigateur Playwright, dont visibilité/clics réels des onglets). Les deux suites passent vert. Seuls des tests unitaires purement front (Vitest) restent à ajouter en v1.1.
+  5. ~~Tests~~ → **Fait (18/10), étendu (19/10)** : `npm run test:api` (**41 assertions** API/RLS/sécurité/expiration, zéro dépendance) et `npm run test:e2e` (**25 assertions** navigateur Playwright, dont JSON-LD, visibilité/clics réels des onglets). Les deux suites passent vert et tournent en CI quand les secrets GitHub sont renseignés. Seuls des tests unitaires purement front (Vitest) restent à ajouter en v1.1.
+
+---
+
+## 16. Déploiement production Vercel — ✅ Fait et testé (18/10)
+
+- Projet Vercel `godson-marketplace` (compte `vpnducanada-5697`) : déploiement de la source
+  (build Vite côté Vercel), variables d'environnement Supabase configurées sur le projet,
+  protection SSO désactivée, alias production **`https://godson-marketplace.vercel.app`**.
+- Vérifié en navigateur réel sur l'URL publique : titre FR, 16 annonces réelles depuis Supabase,
+  routage SPA, fiche annonce FCFA, logo, 0 erreur JS.
+- `godsonmarket.com` (déjà présent dans le compte Vercel, relié au projet le 18/10) : en attente
+  des enregistrements DNS chez name.com (A `76.76.21.21` + CNAME `www → cname.vercel-dns.com`)
+  — l'ancien site qui l'occupe n'a pas été modifié.
+
+## 17. v1.3 — Expiration & reprise des annonces — ✅ Fait et testé (19/10)
+
+- Migration **006** : `listings.expires_at` (défaut `now() + 90 jours`, index partielle),
+  politique RLS publique resserrée (`active` **et** non expirée ; propriétaire/admin inchangés),
+  RPC `renew_listing` (`security definer`, propriétaire ou admin, annonce active uniquement,
+  `revoke` sur `public`/`anon`).
+- Interface : badge « Expirée » + date d'échéance dans l'espace vendeur (+ alerte à J-14),
+  bouton « Reprendre (90 j) » ; fiche annonce : panneau dédié « Annonce expirée » avec reprise.
+- **Tests** : 7 assertions API ajoutées (échéance ≈ 90 j, forçage admin, refus croisé, masquage
+  public, visibilité propriétaire, reprise RPC, refus tiers) — **41/41 API**.
+
+## 18. v1.3 — Données structurées SEO (JSON-LD) — ✅ Fait et testé (19/10)
+
+- Fiche annonce : `Product` (nom, description, photos absolues, offre XAF, état, vendeur
+  Person/Organization selon le type) + `BreadcrumbList` (Accueil → Catalogue → Catégorie → Titre).
+- Site : `Organization` statique dans `<head>`.
+- Bonus : l'URL canonique est désormais calculée sur le domaine réel de consultation
+  (`window.location.origin`) — correcte sur `.vercel.app` comme sur le futur domaine personnalisé,
+  sans re-build.
+- **Tests** : 2 assertions E2E ajoutées (présence des 3 blocs, prix XAF dans le schema) — **25/25 E2E**.
+
+## 19. v1.3 — Observabilité & CI — ✅ Fait / 🔧 partiellement en attente (19/10)
+
+- **Vercel Analytics** (gratuit, sans cookie) : actif et vérifié en production (SDK v2, mode
+  production, chargement du script insights).
+- **Sentry** : intégration prête (`@sentry/react`, initialisation conditionnelle, chunk dynamique
+  → 0 Ko tant qu'inactif). 🔧 En attente : création d'un compte Sentry gratuit + `VITE_SENTRY_DSN`
+  sur Vercel (1 variable, sans re-codage).
+- **CI GitHub Actions** (`.github/workflows/ci.yml`) : build (tsc strict + Vite) à chaque
+  push/PR — **exécution verte vérifiée le 19/10**. Tests API + E2E en CI 🔧 en attente des 3
+  secrets GitHub (`GM_ADMIN_EMAIL`, `GM_ADMIN_PASSWORD`, `VITE_SUPABASE_PUBLISHABLE_KEY`) —
+  le workflow les détecte et saute proprement les tests avec un avertissement tant qu'absents.
+
+## 20. v1.3 — E-mails transactionnels (Brevo) — 🔧 Preparé, en attente d'une clé gratuite (19/10)
+
+- Edge function Supabase **`notify-email`** (ACTIVE) : annonce publiée / refusée / archivée
+  → e-mail au vendeur ; nouveau signalement → e-mail à l'admin (`ADMIN_EMAIL` configuré).
+- Sécurité : service_role **uniquement côté serveur**, JWT de l'appelant vérifié, destinataires
+  toujours lus en base ou dans les secrets (jamais fournis par le client), 401 sans session.
+- **Vérifié** : 401 sans auth ; 503 `email_not_configured` sans clé Brevo (le site et la
+  modération fonctionnent normalement dans cet état — dégradé gracieux, aucun e-mail faux).
+- 🔧 Restant (5 min, gratuit, documenté dans le README « Activer les e-mails ») : compte Brevo
+  (300 e-mails/jour sans carte) → adresse expéditrice + SPF → clé API → secrets
+  `BREVO_API_KEY` + `MAIL_FROM` sur la fonction.
 
 ---
 
 ### Ce qui est immédiatement utilisable
-- Préview live de la v1 complète (front + base en production), comptes démo et admin fonctionnels.
-- Base saine : 0 donnée de test résiduelle, 10 annonces démo labellisées, 2 comptes (démo + admin).
-- **Développement terminé** : build propre (sans avertissement), 57 assertions de tests vertes (34 API + 23 E2E), sitemap dynamique à la build, configs de déploiement zéro-config pour Netlify/Vercel/Cloudflare, repo git initialisé avec commit.
-- Il ne reste que des actions **externes** (choix de l'hébergeur, domaine final, push GitHub, changement du mot de passe admin) — aucune tâche de développement ouverte.
+- **Site en production** : https://godson-marketplace.vercel.app — v1.3 en ligne, PWA installable
+  (service worker vérifié), analytics actif, données structurées SEO sur chaque fiche.
+- Base saine : 10 annonces démo labellisées, comptes démo + admin fonctionnels.
+- **Qualité** : build propre (tsc strict, sans avertissement), **66 assertions de tests vertes
+  (41 API + 25 E2E)**, CI GitHub Actions verte à chaque push, sitemap dynamique à la build.
+- **Frais de catalogue** : expiration 90 jours + reprise gratuite, testée (RLS + RPC).
+- Il ne reste que des actions **externes** (secrets CI GitHub, clé Brevo, DSN Sentry, DNS
+  godsonmarket.com, changement du mot de passe admin) — aucune tâche de développement ouverte.
