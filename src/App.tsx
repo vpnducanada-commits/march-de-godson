@@ -14,6 +14,7 @@ import ListingDetail from './pages/ListingDetail';
 import Publish from './pages/Publish';
 import EditListing from './pages/EditListing';
 import AuthPages from './pages/AuthPages';
+import AuthCallback from './pages/AuthCallback';
 import SellerProfile from './pages/SellerProfile';
 import Dashboard from './pages/Dashboard';
 import Favorites from './pages/Favorites';
@@ -100,6 +101,7 @@ export default function App() {
             <Route path="/connexion" element={<AuthPages mode="login" />} />
             <Route path="/inscription" element={<AuthPages mode="signup" />} />
             <Route path="/mot-de-passe" element={<AuthPages mode="forgot" />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/compte" element={<RequireAuth><Dashboard /></RequireAuth>} />
             <Route path="/compte/favoris" element={<RequireAuth><Favorites /></RequireAuth>} />
             <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
