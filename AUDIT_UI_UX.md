@@ -1,6 +1,11 @@
 # Audit UI / UX / Performance — GODSON Marketplace
 
-**Date :** 19 octobre 2026 · **Version audité :** v1.4 (prod) · **Version après corrections :** v1.5
+**Date :** 19 octobre 2026 · **Version audité :** v1.4 (prod) · **Version après corrections :** v1.5 (+ v1.6 : application)
+
+> ## 🔗 Lien final
+> **Site (production) : https://godson-marketplace.vercel.app**
+> **Page de téléchargement de l'application : https://godson-marketplace.vercel.app/application**
+> Version live : **v1.6** (vérifiée en pied de page)
 **Méthode :** inspection systématique sur l'environnement **production** (https://godson-marketplace.vercel.app) avec Playwright sur 3 cibles — mobile 390×844, tablette 768×1024, desktop 1280×900 — : ~35 captures d'écran (pages publiques, pages compte, 5 onglets admin, profil vendeur), mesures de performance (Navigation Timing), mesures de géométrie DOM (positions réelles des éléments), et vérification des données (base de production).
 Les corrections ont été re-vérifiées sur build local (captures « après ») avant déploiement.
 
@@ -182,7 +187,33 @@ la recherche… » occupait le hero pendant ~1 s au 1er chargement (voir §3.2).
   - test-launch : **parcours complet OK** (signup → publication → catalogue → cleanup) ;
   - captures de confirmation dans `audit-shots/prod-final/` (workspace).
 
-## 7. Recommandations (non implémentées, pour la suite)
+## 7. Application (v1.6) — téléchargement proposé depuis le site
+
+Le site est une **PWA** (Progressive Web App) : installable comme une application sur
+téléphone et ordinateur, sans passer par un magasin d'applications (donc 100 % gratuit,
+sans compte développeur).
+
+Ajouts v1.6 :
+
+| Élément | Détail |
+|---|---|
+| Page **`/application`** | « Télécharger l'application » : bouton d'installation natif (navigateurs Chrome/Edge), **QR code** à scanner depuis un téléphone, étapes par plateforme (Android, iPhone/iPad, ordinateur), bénéfices |
+| Bandeau d'installation | Bandeau discret en haut du site sur les navigateurs qui le supportent (masquable, choix mémorisé, disparaît une fois l'app installée) |
+| Points d'entrée | Footer (« Plateforme »), menu mobile (tiroir), sitemap |
+| Manifest & SW | Déjà en place : manifest complet (nom, icônes 192/512 + maskable, `standalone`, couleur thème), service worker avec app shell hors-ligne (validé par le test PWA hors-ligne) |
+
+**Comportement par plateforme :**
+- **Android (Chrome) / ordinateur (Chrome, Edge)** : le bouton « Installer l'application »
+  déclenche l'invite native (`beforeinstallprompt`) ; sinon, menu du navigateur →
+  « Installer l'application ».
+- **iPhone / iPad (Safari)** : Safari n'émet pas l'invite native → la page guide l'utilisateur
+  (Partager → « Sur l'écran d'accueil ») ; le QR code permet d'ouvrir le site directement
+  sur l'appareil.
+
+**Validation prod v1.6 :** page `/application` OK (QR rendu, 0 erreur JS), test-final 6/6,
+poids transfert 0,64 Mo.
+
+## 8. Recommandations (non implémentées, pour la suite)
 
 1. **Skeletons** pour « Annonces récentes » et « Catégories » au lieu du spinner centré
    (perception de chargement encore meilleure ; le spinner actuel est honnête mais neutre).

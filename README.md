@@ -5,6 +5,17 @@
 Petites annonces et marketplace pour le Gabon — français, FCFA (XAF), localités gabonaises,
 contact direct vendeur/acheteur (pas de paiement en ligne en v1).
 
+## Lien final
+
+- **Site (production) :** <https://godson-marketplace.vercel.app>
+- **Télécharger l'application (PWA) :** <https://godson-marketplace.vercel.app/application>
+- **Version live :** v1.6
+- **Repo GitHub :** <https://github.com/vpnducanada-commits/march-de-godson>
+
+L'application est une PWA : installable sur Android (Chrome), iPhone/iPad (Safari) et
+ordinateur (Chrome/Edge) sans magasin d'applications — manifest, icônes, service worker
+(app shell hors-ligne) et page de téléchargement avec QR code inclus dans le site.
+
 ## Stack
 
 - **Frontend** : React 18 + TypeScript + Vite, React Router 6, PWA (vite-plugin-pwa, Workbox)
