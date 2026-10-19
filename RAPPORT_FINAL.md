@@ -271,6 +271,7 @@ sans aucun impact pour les vrais utilisateurs.
 | **Domaine** : DNS `godsonmarket.com` (A → 76.76.21.21) et/ou `godsonmarket.fr.eu.org` (guide fourni) | Registrar / eu.org | variable |
 | **Mot de passe admin** : changement du mot de passe technique initial | Compte | 1 min |
 | **PWA appareil réel** : installer l'app sur un téléphone (iOS/Android) et tester le parcours complet | — | 10 min |
+| **Anti-spam inscriptions** (conseillé après le lancement) : activer un captcha gratuit (hCaptcha/Cloudflare Turnstile) dans Supabase → Auth → Settings, si le volume de comptes fantômes l'exige (le quota 20 annonces/compte + la modération limitent déjà l'impact) | Supabase Dashboard | 10 min |
 | **Décision paiements v2** : lire `PAIEMENTS_V2_OPTIONS.md` et choisir (agrégateur v1.5 / direct v2) | — | — |
 
 ---
