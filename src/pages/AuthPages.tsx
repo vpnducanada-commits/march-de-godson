@@ -72,12 +72,15 @@ export default function AuthPages({ mode }: { mode: 'login' | 'signup' | 'forgot
         toast('success', 'Compte créé ! Vous pouvez maintenant vous connecter.');
         navigate('/connexion');
       } else {
+        // Le lien de l'e-mail amène sur /auth/callback : le code PKCE y est
+        // échangé automatiquement (detectSessionInUrl) et la page redirige
+        // vers les paramètres, où l'utilisateur choisit son nouveau mot de passe.
         const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/mot-de-passe`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         });
         if (err) throw err;
         setInfo(
-          'Si cet email existe sur la plateforme, un lien de réinitialisation vient de vous être envoyé.',
+          'Si cet email existe sur la plateforme, un lien vient de vous être envoyé. Suivez-le : vous serez reconnecté directement à votre espace, rubrique « Mot de passe », pour choisir un nouveau mot de passe.',
         );
       }
     } catch (err) {

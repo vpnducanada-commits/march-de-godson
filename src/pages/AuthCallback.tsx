@@ -14,7 +14,9 @@ export default function AuthCallback() {
   const { session, loading } = useAuth();
 
   if (loading) return <Spinner label="Vérification de votre session…" />;
-  if (session) return <Navigate to="/compte" replace />;
+  // Cas typique : lien de réinitialisation de mot de passe → on atterrit sur
+  // les paramètres, où l'utilisateur choisit directement son nouveau mot de passe.
+  if (session) return <Navigate to="/compte/parametres" replace />;
 
   return (
     <div className="container page-narrow" style={{ paddingTop: 48 }}>
