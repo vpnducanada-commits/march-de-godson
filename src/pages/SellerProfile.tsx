@@ -89,8 +89,10 @@ export default function SellerProfile() {
       </div>
       <p className="seller-head__notice">
         <Icon name="info" size={15} />
-        Le vendeur n'est pas vérifié par GODSON Marketplace. Restez prudent lors des transactions
-        et consultez nos <Link to="/securite">conseils de sécurité</Link>.
+        <span>
+          Le vendeur n'est pas vérifié par GODSON Marketplace. Restez prudent lors des
+          transactions et consultez nos <Link to="/securite">conseils de sécurité</Link>.
+        </span>
       </p>
 
       <h2 className="section__title">Annonces actives ({items.length})</h2>

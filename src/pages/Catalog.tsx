@@ -92,6 +92,7 @@ export default function Catalog({ fixedCat }: { fixedCat?: string }) {
   };
 
   const hasFilters = !!(q || cat || city || min || max || cond);
+  const activeFilterCount = [q, cat, city, min, max, cond].filter(Boolean).length;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const subcats = cat ? categories.filter((c) => c.parent_id !== null && c.slug === cat) : [];
   const parentOfSelected = subcats.length
@@ -119,7 +120,7 @@ export default function Catalog({ fixedCat }: { fixedCat?: string }) {
           aria-expanded={filtersOpen}
         >
           <Icon name="filter" size={16} />
-          Filtres {hasFilters ? '·' : ''}
+          Filtres{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
         </button>
       </div>
 

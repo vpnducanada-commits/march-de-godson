@@ -62,11 +62,7 @@ export default function Home() {
             </p>
           </div>
           <div className="hero__search">
-            {localities.length > 0 ? (
-              <SearchBar localities={localities} size="lg" />
-            ) : (
-              <Spinner label="Préparation de la recherche…" />
-            )}
+            <SearchBar localities={localities} size="lg" />
             <p className="hero__hint">
               <Link to="/annonces?cat=telephones">Téléphones</Link>
               <Link to="/annonces?cat=immobilier">Immobilier</Link>

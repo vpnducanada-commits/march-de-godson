@@ -33,9 +33,9 @@ export function Footer() {
           <h4 className="footer__h">Contact</h4>
           <p className="footer__contact">
             <Icon name="shield" size={15} />
-            Signalez un problème directement depuis la page d'une annonce (bouton
-            « Signaler »). Le formulaire de contact général sera disponible à la
-            prochaine étape.
+            Un problème avec une annonce ? Signalez-le directement depuis sa page
+            (bouton « Signaler »). Notre équipe de modération examine chaque
+            signalement.
           </p>
         </div>
       </div>

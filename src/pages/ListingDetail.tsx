@@ -180,8 +180,11 @@ export default function ListingDetail() {
       { name: 'Catalogue', item: `${origin}/annonces` },
     ];
     const crumbCat = parentCat ?? item.category;
-    if (crumbCat) crumbs.push({ name: crumbCat.name, item: `${origin}/annonces?cat=${crumbCat.slug}` });
-    if (item.subcategory) crumbs.push({ name: item.subcategory.name });
+    // Ne publie pas le maillon « catégorie » tant que le parent n'est pas
+    // résolu (évite le flash « Smartphones > Smartphones »).
+    const catResolved = item.category?.parent_id == null || parentCat !== null;
+    if (crumbCat && catResolved) crumbs.push({ name: crumbCat.name, item: `${origin}/annonces?cat=${crumbCat.slug}` });
+    if (item.subcategory && catResolved) crumbs.push({ name: item.subcategory.name });
     crumbs.push({ name: item.listing.title });
     return {
       '@context': 'https://schema.org',
@@ -338,6 +341,9 @@ export default function ListingDetail() {
   // Fil d'Ariane : si l'annonce est dans une sous-catégorie, le maillon
   // « catégorie » pointe vers la catégorie parente (pas de nom dupliqué).
   const crumbCat = parentCat ?? category;
+  // Le maillon catégorie n'est affiché que quand la hiérarchie est connue,
+  // pour éviter l'affichage transitoire « Smartphones > Smartphones ».
+  const catResolved = category?.parent_id == null || parentCat !== null;
 
   return (
     <div className="container detail">
@@ -345,7 +351,7 @@ export default function ListingDetail() {
         <Link to="/">Accueil</Link>
         <Icon name="chevron-right" size={13} />
         <Link to="/annonces">Catalogue</Link>
-        {crumbCat && (
+        {crumbCat && catResolved && (
           <>
             <Icon name="chevron-right" size={13} />
             <Link to={`/annonces?cat=${crumbCat.slug}`}>
@@ -353,7 +359,7 @@ export default function ListingDetail() {
             </Link>
           </>
         )}
-        {subcategory && (
+        {subcategory && catResolved && (
           <>
             <Icon name="chevron-right" size={13} />
             <span aria-current="page">{subcategory.name}</span>

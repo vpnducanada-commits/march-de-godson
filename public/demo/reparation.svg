@@ -9,16 +9,5 @@
   <g transform="translate(232,56) scale(2.4)" stroke="#0A1633" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.92">
     <g transform="translate(18,18) scale(4.5)"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></g>
   </g>
-  <text x="400" y="452" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="34" font-weight="700" fill="#0A1633">Réparation informatique</text>
   <text x="400" y="492" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="19" fill="#667085">Image d'exemple — Services</text>
-  <g>
-    <rect x="24" y="24" width="236" height="40" rx="20" fill="#F5B82E"/>
-    <text x="142" y="50" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="15.5" font-weight="800" fill="#0A1633">ANNONCE DE DÉMONSTRATION</text>
-  </g>
-  <g transform="translate(704,544) scale(0.9)">
-    <rect x="0" y="0" width="52" height="52" rx="11" fill="#0A1633"/>
-    <path d="M 27.1 38.2 A 13.4 13.4 0 1 1 27.1 15.2" stroke="#fff" stroke-width="4.8" stroke-linecap="round" fill="none"/>
-    <line x1="20.5" y1="26" x2="31" y2="26" stroke="#fff" stroke-width="4.8" stroke-linecap="round"/>
-    <path d="M 35.2 40 L 35.2 14 L 42.4 31.6 L 49.6 14 L 49.6 40" stroke="#F5B82E" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  </g>
 </svg>

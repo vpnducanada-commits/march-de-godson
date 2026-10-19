@@ -60,6 +60,7 @@ export function Header() {
   };
 
   return (
+    <>
     <header className="header">
       <div className="header__inner container">
         <button
@@ -75,7 +76,7 @@ export function Header() {
         <Logo variant="dark" compact />
 
         <div className="header__search">
-          {localities.length > 0 && <SearchBar localities={localities} />}
+          <SearchBar localities={localities} />
         </div>
 
         <nav className="header__nav" aria-label="Actions principales">
@@ -153,12 +154,15 @@ export function Header() {
           )}
         </nav>
       </div>
+    </header>
 
-      {/* Tiroir mobile */}
-      {menuOpen && (
-        <div className="drawer-overlay" onClick={() => setMenuOpen(false)} />
-      )}
-      <aside className={`drawer${menuOpen ? ' drawer--open' : ''}`} aria-hidden={!menuOpen}>
+    {/* Tiroir mobile — rendu en dehors de <header> : le backdrop-filter du
+        header crée un containing block pour les éléments fixed, ce qui
+        réduirait le tiroir à la hauteur du header. */}
+    {menuOpen && (
+      <div className="drawer-overlay" onClick={() => setMenuOpen(false)} />
+    )}
+    <aside className={`drawer${menuOpen ? ' drawer--open' : ''}`} aria-hidden={!menuOpen}>
         <div className="drawer__head">
           <Logo variant="dark" compact as="div" />
           <button type="button" className="icon-btn" aria-label="Fermer le menu" onClick={() => setMenuOpen(false)}>
@@ -166,7 +170,7 @@ export function Header() {
           </button>
         </div>
         <div className="drawer__search">
-          {localities.length > 0 && <SearchBar localities={localities} onDone={() => setMenuOpen(false)} />}
+          <SearchBar localities={localities} onDone={() => setMenuOpen(false)} />
         </div>
         <nav className="drawer__nav" aria-label="Menu principal">
           <NavLink to="/annonces" onClick={() => setMenuOpen(false)}>
@@ -198,18 +202,14 @@ export function Header() {
           </button>
           {catOpen && (
             <div className="drawer__cats-list">
-              {localities.length > 0 && (
-                <>
-                  <Link to="/annonces?cat=telephones" onClick={() => setMenuOpen(false)}>Téléphones & accessoires</Link>
-                  <Link to="/annonces?cat=informatique" onClick={() => setMenuOpen(false)}>Informatique & électronique</Link>
-                  <Link to="/annonces?cat=vehicules" onClick={() => setMenuOpen(false)}>Véhicules & automobile</Link>
-                  <Link to="/annonces?cat=immobilier" onClick={() => setMenuOpen(false)}>Immobilier</Link>
-                  <Link to="/annonces?cat=maison" onClick={() => setMenuOpen(false)}>Maison & décoration</Link>
-                  <Link to="/annonces?cat=mode" onClick={() => setMenuOpen(false)}>Mode & chaussures</Link>
-                  <Link to="/annonces?cat=services" onClick={() => setMenuOpen(false)}>Services professionnels</Link>
-                  <Link to="/annonces?cat=emploi" onClick={() => setMenuOpen(false)}>Emploi & recrutement</Link>
-                </>
-              )}
+              <Link to="/annonces?cat=telephones" onClick={() => setMenuOpen(false)}>Téléphones & accessoires</Link>
+              <Link to="/annonces?cat=informatique" onClick={() => setMenuOpen(false)}>Informatique & électronique</Link>
+              <Link to="/annonces?cat=vehicules" onClick={() => setMenuOpen(false)}>Véhicules & automobile</Link>
+              <Link to="/annonces?cat=immobilier" onClick={() => setMenuOpen(false)}>Immobilier</Link>
+              <Link to="/annonces?cat=maison" onClick={() => setMenuOpen(false)}>Maison & décoration</Link>
+              <Link to="/annonces?cat=mode" onClick={() => setMenuOpen(false)}>Mode & chaussures</Link>
+              <Link to="/annonces?cat=services" onClick={() => setMenuOpen(false)}>Services professionnels</Link>
+              <Link to="/annonces?cat=emploi" onClick={() => setMenuOpen(false)}>Emploi & recrutement</Link>
             </div>
           )}
         </div>
@@ -224,6 +224,6 @@ export function Header() {
           </div>
         )}
       </aside>
-    </header>
+    </>
   );
 }
