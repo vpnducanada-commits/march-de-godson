@@ -27,6 +27,40 @@ import DownloadApp from './pages/DownloadApp';
 import { usePwaInstall } from './hooks/usePwaInstall';
 
 /**
+ * Bandeau « hors ligne » (PWA) : l'app shell reste consultable sans réseau
+ * (précache), mais le chargement de nouvelles données est suspendu — le
+ * bandeau l'indique honnêtement tant que la connexion est revenue.
+ */
+function OfflineBanner() {
+  const [offline, setOffline] = useState(() => !navigator.onLine);
+
+  useEffect(() => {
+    const on = () => setOffline(false);
+    const off = () => setOffline(true);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', off);
+    };
+  }, []);
+
+  if (!offline) return null;
+
+  return (
+    <div className="offline-banner" role="status" aria-live="polite">
+      <div className="container offline-banner__inner">
+        <Icon name="globe" size={15} />
+        <span>
+          Vous êtes hors ligne — le contenu déjà chargé reste consultable ; les nouvelles
+          données se chargeront au retour de la connexion.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Bandeau PWA : propose l'installation sur les navigateurs qui l'émettent
  * (Chrome/Edge — Android et desktop). Masquable, mémorisé dans localStorage,
  * et absent dès que l'app est installée ou déjà lancée en standalone.
@@ -131,6 +165,7 @@ export default function App() {
       </a>
       <div className="app-shell">
         <Header />
+        <OfflineBanner />
         <InstallBanner />
         {demoMode && (
           <div className="demo-banner" role="note">

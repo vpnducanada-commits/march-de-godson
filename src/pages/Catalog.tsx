@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { ListingCard } from '../components/ListingCard';
 import { Pagination } from '../components/ui/Pagination';
-import { Spinner } from '../components/ui/Spinner';
+import { SkeletonListingGrid } from '../components/ui/Skeleton';
 import { EmptyState } from '../components/ui/EmptyState';
 import {
   fetchCategories,
@@ -246,7 +246,7 @@ export default function Catalog({ fixedCat }: { fixedCat?: string }) {
           {error && (
             <EmptyState icon="alert" title="Recherche impossible" message={error} />
           )}
-          {!error && loading && <Spinner label="Recherche en cours…" />}
+          {!error && loading && <SkeletonListingGrid count={8} />}
           {!error && !loading && items && items.length === 0 && (
             <EmptyState
               icon="search"

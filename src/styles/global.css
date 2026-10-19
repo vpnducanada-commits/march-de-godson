@@ -2944,6 +2944,72 @@ input, select, textarea {
   border-top-color: var(--navy);
 }
 
+/* Squelettes de chargement (shimmer) */
+.skeleton {
+  background: linear-gradient(90deg, #e8ecf4 25%, #f4f6fb 50%, #e8ecf4 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.3s ease infinite;
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-card {
+  overflow: hidden;
+}
+
+.skeleton--media {
+  aspect-ratio: 4 / 3;
+  border-radius: 0;
+}
+
+.skeleton--line {
+  height: 13px;
+  border-radius: 6px;
+}
+
+.skeleton-card .skeleton--line + .skeleton--line {
+  margin-top: 8px;
+}
+
+.skeleton--w40 { width: 40%; }
+.skeleton--w55 { width: 55%; }
+.skeleton--w80 { width: 80%; }
+.skeleton--w90 { width: 90%; }
+
+.skeleton--icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.skeleton-cat {
+  gap: 10px;
+}
+
+/* Bandeau « hors ligne » (PWA) */
+.offline-banner {
+  background: #7c2d12;
+  color: #fff;
+}
+
+.offline-banner__inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+
+.offline-banner__inner svg {
+  color: #fdba74;
+  flex-shrink: 0;
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

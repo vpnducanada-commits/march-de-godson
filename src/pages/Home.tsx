@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon';
 import { SearchBar } from '../components/SearchBar';
 import { ListingCard } from '../components/ListingCard';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Spinner } from '../components/ui/Spinner';
+import { SkeletonCatGrid, SkeletonListingGrid } from '../components/ui/Skeleton';
 import { fetchCategories, fetchLocalities, fetchListings } from '../lib/api';
 import type { Category, ListingFull, Locality } from '../lib/types';
 import { usePageMeta } from '../hooks/usePageMeta';
@@ -94,7 +94,7 @@ export default function Home() {
               ))}
             </div>
           ) : (
-            !error && <Spinner label="Chargement des catégories…" />
+            !error && <SkeletonCatGrid count={8} />
           )}
         </div>
       </section>
@@ -109,7 +109,7 @@ export default function Home() {
             </Link>
           </div>
           {error && <EmptyState icon="alert" title="Chargement impossible" message={error} />}
-          {!error && recent === null && <Spinner label="Chargement des annonces…" />}
+          {!error && recent === null && <SkeletonListingGrid count={8} />}
           {recent && recent.length === 0 && (
             <EmptyState
               icon="tag"
