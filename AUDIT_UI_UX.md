@@ -171,7 +171,18 @@ la recherche… » occupait le hero pendant ~1 s au 1er chargement (voir §3.2).
 
 ---
 
-## 6. Recommandations (non implémentées, pour la suite)
+## 6. Déploiement et validation production
+
+- **Commit :** `018fdee` (main, repo `vpnducanada-commits/march-de-godson`) · **Version : v1.5**
+- **Déployé sur https://godson-marketplace.vercel.app** le 19/10/2026 (Vercel, build ~20 s).
+- **Re-vérification prod après déploiement :**
+  - Version v1.5 confirmée en pied de page ;
+  - 12 routes principales : **0 erreur JavaScript** ;
+  - test-final : **6/6** (auth, e-mail reset, PWA hors-ligne, perf < 8 s / < 3 Mo) ;
+  - test-launch : **parcours complet OK** (signup → publication → catalogue → cleanup) ;
+  - captures de confirmation dans `audit-shots/prod-final/` (workspace).
+
+## 7. Recommandations (non implémentées, pour la suite)
 
 1. **Skeletons** pour « Annonces récentes » et « Catégories » au lieu du spinner centré
    (perception de chargement encore meilleure ; le spinner actuel est honnête mais neutre).
