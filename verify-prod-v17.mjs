@@ -1,0 +1,23 @@
+import { chromium } from 'playwright';
+const B = 'https://godson-marketplace.vercel.app';
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 } });
+const p = await ctx.newPage();
+let errs = 0;
+p.on('pageerror', (e) => { errs++; console.log('PAGEERROR:', e.message.slice(0, 100)); });
+await p.goto(B + '/annonce/demo-iphone-13-pro', { waitUntil: 'networkidle', timeout: 30000 });
+await p.waitForTimeout(2500);
+const v = await p.evaluate(() => document.body.innerText.match(/v1\.\d/)?.[0] ?? 'n/a');
+const fiche = await p.evaluate(() => {
+  const el = document.querySelector('.detail__safety');
+  const t = el?.textContent ?? '';
+  return { airtel: t.includes('Airtel Money'), nb: t.includes('payez à la livraison'), confiance: t.includes('confiance au vendeur') };
+});
+await p.locator('.detail__safety').screenshot({ path: '/home/user/audit-shots/prod-final/nb-prod-fiche.png' });
+await p.goto(B + '/securite', { waitUntil: 'networkidle' });
+const sec = await p.evaluate(() => document.body.innerText.includes('NB : ne payez que si vous avez confiance'));
+await p.goto(B + '/faq', { waitUntil: 'networkidle' });
+const faq = await p.evaluate(() => document.body.innerText.includes('Quel moyen de paiement est recommandé'));
+console.log(`version=${v} fiche=${JSON.stringify(fiche)} securite=${sec} faq=${faq} pageerrors=${errs}`);
+await b.close();
+process.exit(0);

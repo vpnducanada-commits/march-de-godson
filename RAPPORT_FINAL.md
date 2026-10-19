@@ -272,7 +272,7 @@ sans aucun impact pour les vrais utilisateurs.
 | **Mot de passe admin** : changement du mot de passe technique initial | Compte | 1 min |
 | **PWA appareil réel** : installer l'app sur un téléphone (iOS/Android) et tester le parcours complet | — | 10 min |
 | **Anti-spam inscriptions** (conseillé après le lancement) : activer un captcha gratuit (hCaptcha/Cloudflare Turnstile) dans Supabase → Auth → Settings, si le volume de comptes fantômes l'exige (le quota 20 annonces/compte + la modération limitent déjà l'impact) | Supabase Dashboard | 10 min |
-| **✅ Décision paiements v2** (19/10, exploitant) : **paiement confirmé sur Airtel Money** (Option A — direct). Reste la Phase 0 : dossier KYB (RCCM, NIF, RIB, statuts) + ouverture du compte marchand Airtel (onboarding constaté 3–6 semaines) ; le bouton « Payer par Airtel Money » sera branché dès réception des identifiants API | Airtel Money Gabon / developers.airtel.africa | variable |
+| **✅ Décision paiements v2** (19/10, exploitant) : **paiement confirmé sur Airtel Money** (Option A — direct). Reste la Phase 0 : dossier KYB + ouverture du compte marchand Airtel (onboarding constaté 3–6 semaines) — **checklist de pièces + modèle de description d'activité fournis dans `KYB_AIRTEL_MONEY.md`** ; le bouton « Payer par Airtel Money » sera branché dès réception des identifiants API | Airtel Money Gabon / developers.airtel.africa | variable |
 
 ---
 
