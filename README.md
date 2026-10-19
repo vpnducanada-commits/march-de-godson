@@ -92,7 +92,22 @@ Guide domaine gratuit (eu.org) : voir [`GUIDE_DOMAINE_EU_ORG.md`](GUIDE_DOMAINE_
 **Architecture messagerie** : tables `conversations` (unique `listing_id`+`buyer_id`) et
 `messages` (publication Realtime `supabase_realtime`) ; les abonnements côté client partagent
 un canal unique avec registre de listeners (refcounting) — un composant peut s'abonner sans
-jamais ré-ouvrir un canal déjà actif (exigence Supabase Realtime).
+jamais ré-ouvrir un canal déjà actif (exigence Supabase Realtime). Le canal global écoute
+`messages` ET `conversations` : le vendeur voit apparaître une conversation dès son ouverture.
+
+## Préparation au lancement (19/10, audit complet)
+
+Corrections et vérifications menées pour le lancement public :
+
+| Point | Détail |
+|---|---|
+| **Réinitialisation de mot de passe aboutie** | `site_url` Supabase Auth corrigé (était `localhost:3000`) + `uri_allow_list` production ; nouveau `redirectTo` → `/auth/callback` (nouvelle route dédiée, ne tombe plus sur la 404) → redirection `/compte/parametres` où l'utilisateur choisit son nouveau mot de passe |
+| **Inscription sans friction** | `mailer_autoconfirm` actif : un nouveau compte peut se connecter **immédiatement**, sans e-mail de confirmation (parcours testé de bout en bout : inscription → login → publication → visible au catalogue) |
+| **Temps réel complet** | Test à deux navigateurs réels : la conversation apparaît chez le vendeur dès son ouverture (migration 010 : `conversations` dans la publication Realtime), messages bidirectionnels sans rechargement, badge de non-lus mis à jour |
+| **Favicon.ico** | Icône 16/32/48 générée depuis le symbole officiel (plus de fallback HTML sur `/favicon.ico`) |
+| **PWA hors ligne** | Service worker + précache vérifiés : l'app shell s'affiche sans réseau |
+| **Scripts de vérification** | `test-launch.mjs` (parcours inscription→publication), `test-realtime.mjs` (2 navigateurs), `test-final.mjs` (auth callback, PWA offline, perf), `verify-prod.mjs` (parcours admin complet) |
+| **Base propre** | Comptes de test purgés ; 5 comptes réels (démo + administration + utilisateurs) |
 
 ## v1.3 — Améliorations (19/10/2026)
 

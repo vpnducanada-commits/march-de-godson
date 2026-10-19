@@ -29,12 +29,14 @@ const browser = await chromium.launch();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e).slice(0, 150)));
   await page.goto(BASE + '/mot-de-passe', { waitUntil: 'networkidle' });
-  await page.locator('input[type="email"]').first().fill('demo@godson-market.example');
+  // GoTrue /recover rejette les TLD réservés (.example) réservés au compte démo —
+  // sans impact pour les vrais utilisateurs. Le message est générique (anti-énumération).
+  await page.locator('input[type="email"]').first().fill('godson.launch.verify@gmail.com');
   await page.getByRole('button', { name: /envoyer|réinitialiser/i }).first().click();
   await page.waitForTimeout(3000);
-  const body = await page.locator('.auth-card').first().textContent();
-  const okMsg = /si cet email existe|vient de vous être envoyé/i.test(body || '');
-  check('mot de passe oublié : soumission OK + message de confirmation', okMsg && errors.length === 0, errors[0] || (body || '').slice(0, 110).replace(/\s+/g, ' '));
+  const body = (await page.locator('.auth-card').first().textContent()) || '';
+  const okMsg = /si cet email existe|vient de vous être envoyé/i.test(body);
+  check('mot de passe oublié : soumission OK + message de confirmation', okMsg && errors.length === 0, errors[0] || body.replace(/\s+/g, ' ').slice(0, 220));
   await ctx.close();
 }
 

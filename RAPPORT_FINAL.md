@@ -239,6 +239,40 @@ Batterie de tests REST exécutée ce jour (résultats) :
   2–2,5 % ; SingPay 0 % ≤ 25 M FCFA). **Aucun code payant écrit, aucun prix officiel inventé** —
   ordres de grandeur datés avec 16 sources citées ; feuille de route en 3 phases.
 
+## 25. Préparation au lancement — audit complet (19/10)
+
+Audit de lancement effectué en production, avec corrections et re-vérifications :
+
+| Vérification | Résultat |
+|---|---|
+| **Inscription → login → publication → visible** (parcours utilisateur réel) | ✅ Testé de bout en bout (autoconfirm : connexion immédiate sans e-mail) |
+| **Réinitialisation de mot de passe** | 🔧→✅ Corrigé : `site_url` était `http://localhost:3000` (liens cassés) ; `redirectTo` pointait sur le formulaire même page ; maintenant `/auth/callback` (route dédiée) → `/compte/parametres` ; `uri_allow_list` production. Le lien de l'e-mail pointe sur la bonne origine (l'envoi lui-même dépend du fournisseur d'e-mails Supabase — à confirmer avec une boîte réelle, voir §26) |
+| **Messagerie temps réel 2 navigateurs** | ✅ Conversation visible chez le vendeur dès son ouverture (migration 010 : `conversations` dans la publication Realtime) ; messages bidirectionnels sans rechargement ; badge non-lus temps réel |
+| **Toutes les routes** (annonces, catégories, fiche, vendeur, compte, favoris, admin, messages, légales, 404) | ✅ Parcours Playwright en production : 0 erreur JS |
+| **PWA** | ✅ Manifeste + icônes 192/512/masquable/apple/`favicon.ico` (généré) ; service worker enregistré ; **app shell affichée hors ligne** (précache testé) |
+| **SEO** | ✅ `robots.txt` (exclut /admin, /compte, /modifier), `sitemap.xml` dynamique à la build, JSON-LD vérifié |
+| **Sécurité** | ✅ En-têtes prod : HSTS preload, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy` (caméra/mic/géo désactivés) ; RLS testé (62 assertions) |
+| **Performance** | ✅ Accueil < 1 s (réseau sandbox→prod), transfert ≈ 0,6 Mo ; assets immuables (max-age 1 an) |
+| **Données** | ✅ 10 annonces démo labellisées (expiration ~90 j, aucune en péril) ; comptes de test purgés (5 comptes réels) ; messagerie : zéro conversation résiduelle |
+| **CI** | ✅ Verte à chaque push (build) ; les suites de tests sont exécutées manuellement et via les scripts du repo — l'activation en CI attend les 3 secrets GitHub (§26) |
+
+**Écart mineur documenté** : les comptes à domaine réservé `.example` (démo, admin technique)
+ne peuvent pas utiliser « Mot de passe oublié » (GoTrue /recover rejette les TLD réservés) —
+sans aucun impact pour les vrais utilisateurs.
+
+## 26. Actions restantes (toutes côté exploitant)
+
+| Action | Où | Temps |
+|---|---|---|
+| **3 secrets CI** : `GM_ADMIN_EMAIL`, `GM_ADMIN_PASSWORD`, `VITE_SUPABASE_PUBLISHABLE_KEY` | GitHub → repo → Settings → Secrets → Actions (l'API sandbox ne permet pas de les pousser) | 2 min |
+| **E-mails transactionnels** : compte Brevo gratuit (300/j, sans carte) → SPF → clé API → secrets `BREVO_API_KEY` + `MAIL_FROM` sur la fonction `notify-email` | Brevo + Supabase Edge Functions | 10 min |
+| **Confirmer l'e-mail de réinitialisation** : demander un « mot de passe oublié » depuis une boîte réelle et vérifier la réception (fournisseur e-mails par défaut de Supabase) | — | 1 min |
+| **Sentry** : `VITE_SENTRY_DSN` (compte gratuit) sur Vercel → les erreurs JS remontent automatiquement | Vercel → Environment variables | 5 min |
+| **Domaine** : DNS `godsonmarket.com` (A → 76.76.21.21) et/ou `godsonmarket.fr.eu.org` (guide fourni) | Registrar / eu.org | variable |
+| **Mot de passe admin** : changement du mot de passe technique initial | Compte | 1 min |
+| **PWA appareil réel** : installer l'app sur un téléphone (iOS/Android) et tester le parcours complet | — | 10 min |
+| **Décision paiements v2** : lire `PAIEMENTS_V2_OPTIONS.md` et choisir (agrégateur v1.5 / direct v2) | — | — |
+
 ---
 
 ### Ce qui est immédiatement utilisable
