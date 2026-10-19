@@ -314,7 +314,157 @@ const renewCross = await api('/rest/v1/rpc/renew_listing', {
 });
 check('rls : reprise d\'une annonce d\'un tiers refusée', renewCross.status === 400, `status=${renewCross.status}`);
 
+// ---------- MESSAGERIE ----------
+// Une insertion PostgREST ne renvoie les lignes qu'avec `Prefer: return=representation`.
+const PREF_REPR = { headers: { Prefer: 'return=representation' } };
+const firstId = (json) => (Array.isArray(json) ? json[0]?.id : json?.id);
+
+const demoSellerRow = await api(`/rest/v1/listings?select=seller_id&slug=eq.demo-iphone-13-pro`);
+const demoSellerId = (demoSellerRow.json || [])[0]?.seller_id;
+const adminUserId = (rpcAdmin.json || []).find((u) => u.email === ADMIN_EMAIL)?.id;
+
+// L'acheteur ne peut pas ouvrir de conversation avec lui-même.
+const convSelf = await api('/rest/v1/conversations', {
+  token: temp.access_token,
+  method: 'POST',
+  body: { listing_id: demoLId, buyer_id: tempId, seller_id: tempId },
+});
+check('messagerie : conversation avec soi-même refusée', convSelf.status === 403 || (convSelf.json || []).length === 0, `status=${convSelf.status}`);
+
+// L'acheteur ouvre une conversation avec le vendeur démo.
+const conv1 = await api('/rest/v1/conversations', {
+  token: temp.access_token,
+  method: 'POST',
+  body: { listing_id: demoLId, buyer_id: tempId, seller_id: demoSellerId },
+  headers: { Prefer: 'return=representation' },
+});
+const convId = firstId(conv1.json);
+check('messagerie : l\'acheteur ouvre une conversation', Boolean(convId), `status=${conv1.status}`);
+
+// Une seule conversation par (annonce, acheteur) : la seconde est en conflit.
+const conv2 = await api('/rest/v1/conversations', {
+  token: temp.access_token,
+  method: 'POST',
+  body: { listing_id: demoLId, buyer_id: tempId, seller_id: demoSellerId },
+});
+check('messagerie : une seule conversation par (annonce, acheteur)', conv2.status === 409, `status=${conv2.status}`);
+
+// Invisibilité : anonyme et tiers (admin) ne voient rien.
+const convAnon = await api(`/rest/v1/conversations?select=id&buyer_id=eq.${tempId}`);
+check('rls messagerie : conversations invisibles pour un anonyme', (convAnon.json || []).length === 0);
+const convAdmin = await api(`/rest/v1/conversations?select=id&buyer_id=eq.${tempId}`, { token: adminTok });
+check('rls messagerie : conversations invisibles pour un tiers (admin)', (convAdmin.json || []).length === 0);
+const convOwn = await api(`/rest/v1/conversations?select=id&buyer_id=eq.${tempId}`, { token: temp.access_token });
+check('rls messagerie : l\'acheteur voit sa conversation', (convOwn.json || []).length === 1);
+
+// L'acheteur envoie un message ; le message vide est refusé.
+const msg1 = await api('/rest/v1/messages', {
+  token: temp.access_token,
+  method: 'POST',
+  body: { conversation_id: convId, sender_id: tempId, body: 'Bonjour, est-ce toujours disponible ?' },
+  headers: { Prefer: 'return=representation' },
+});
+check('messagerie : l\'acheteur envoie un message', Boolean(firstId(msg1.json)), `status=${msg1.status}`);
+const msgEmpty = await api('/rest/v1/messages', {
+  token: temp.access_token,
+  method: 'POST',
+  body: { conversation_id: convId, sender_id: tempId, body: '' },
+});
+check('messagerie : message vide refusé (contrainte)', msgEmpty.status === 400, `status=${msgEmpty.status}`);
+
+// Un tiers (admin, non participant) ne peut pas écrire dans la conversation.
+const msgCross = await api('/rest/v1/messages', {
+  token: adminTok,
+  method: 'POST',
+  body: { conversation_id: convId, sender_id: adminUserId, body: 'je ne suis pas participant' },
+});
+check('rls messagerie : message d\'un non-participant refusé', msgCross.status === 403 || (msgCross.json || []).length === 0, `status=${msgCross.status}`);
+
+// Usurpation : l'acheteur ne peut pas écrire en se faisant passer pour le vendeur.
+const msgSpoof = await api('/rest/v1/messages', {
+  token: temp.access_token,
+  method: 'POST',
+  body: { conversation_id: convId, sender_id: demoSellerId, body: 'usurpation' },
+});
+check('rls messagerie : usurpation de sender_id refusée', msgSpoof.status === 403 || (msgSpoof.json || []).length === 0, `status=${msgSpoof.status}`);
+
+// Le vendeur voit la conversation et répond.
+const demoConv = await api(`/rest/v1/conversations?select=id&seller_id=eq.${demoSellerId}`, { token: demoTok });
+check('rls messagerie : le vendeur voit la conversation', (demoConv.json || []).length >= 1, `${(demoConv.json || []).length} conversation(s)`);
+const demoReply = await api('/rest/v1/messages', {
+  token: demoTok,
+  method: 'POST',
+  body: { conversation_id: convId, sender_id: demoSellerId, body: 'Oui, toujours disponible.' },
+  headers: { Prefer: 'return=representation' },
+});
+check('messagerie : le vendeur répond', Boolean(firstId(demoReply.json)), `status=${demoReply.status}`);
+const msgRead = await api(`/rest/v1/messages?select=body&conversation_id=eq.${convId}`, { token: temp.access_token });
+check('messagerie : l\'acheteur lit la réponse du vendeur', (msgRead.json || []).length === 2, `${(msgRead.json || []).length} message(s)`);
+
+// Compteur de non-lus : 1 (la réponse du vendeur).
+const unread1 = await api('/rest/v1/rpc/unread_count', { token: temp.access_token, method: 'POST', body: {} });
+const unreadVal1 = typeof unread1.json === 'number' ? unread1.json : unread1.json?.unread_count;
+check('messagerie : compteur de non-lus = 1', unreadVal1 === 1, `valeur=${unreadVal1}`);
+
+// Marquage « lu » puis compteur à 0.
+const markRead = await api(`/rest/v1/messages?conversation_id=eq.${convId}&read_at=is.null`, {
+  token: temp.access_token,
+  method: 'PATCH',
+  body: { read_at: new Date().toISOString() },
+});
+check('messagerie : marquage « lu » OK', markRead.status === 204, `status=${markRead.status}`);
+const unread2 = await api('/rest/v1/rpc/unread_count', { token: temp.access_token, method: 'POST', body: {} });
+const unreadVal2 = typeof unread2.json === 'number' ? unread2.json : unread2.json?.unread_count;
+check('messagerie : compteur de non-lus remis à 0', unreadVal2 === 0, `valeur=${unreadVal2}`);
+
+// Le vendeur ne peut pas supprimer la conversation de l'acheteur.
+await api(`/rest/v1/conversations?id=eq.${convId}`, { token: demoTok, method: 'DELETE' });
+const convStill = await api(`/rest/v1/conversations?select=id&id=eq.${convId}`, { token: temp.access_token });
+check('rls messagerie : le vendeur ne supprime pas la conversation', (convStill.json || []).length === 1);
+
+// ---------- QUOTA ANTI-SPAM (20 annonces actives max / compte) ----------
+// L'utilisateur temporaire a déjà 1 annonce active (mySlug).
+const quotaSlugs = [mySlug];
+for (let i = 2; i <= 20; i++) {
+  const s = `quota-${ts}-${i}`;
+  const q = await api('/rest/v1/listings', {
+    token: temp.access_token,
+    method: 'POST',
+    body: {
+      seller_id: tempId,
+      category_id: (cats.json || [])[0]?.id,
+      title: `Annonce quota ${i}`,
+      slug: s,
+      description: 'Annonce temporaire de test du quota, supprimée en fin de run.',
+      status: 'active',
+    },
+  });
+  if (q.status === 201 || q.status === 200) quotaSlugs.push(s);
+}
+check('quota : 20 annonces actives acceptées', quotaSlugs.length === 20, `${quotaSlugs.length} annonce(s)`);
+const quotaOver = await api('/rest/v1/listings', {
+  token: temp.access_token,
+  method: 'POST',
+  body: {
+    seller_id: tempId,
+    category_id: (cats.json || [])[0]?.id,
+    title: 'Annonce quota 21',
+    slug: `quota-${ts}-21`,
+    description: 'Vingt-et-unième annonce active, refusée par le quota.',
+    status: 'active',
+  },
+});
+check('quota : la 21e annonce active est refusée', quotaOver.status === 400 && /QUOTA_DEPASSE/i.test(quotaOver.json?.message || ''), `status=${quotaOver.status}`);
+// Nettoyage des annonces de quota (mySlug est supprimé plus bas).
+for (const s of quotaSlugs.filter((x) => x !== mySlug)) {
+  await api(`/rest/v1/listings?slug=eq.${s}`, { token: temp.access_token, method: 'DELETE' });
+}
+
 // ---------- NETTOYAGE ----------
+const convDel = await api(`/rest/v1/conversations?id=eq.${convId}`, { token: temp.access_token, method: 'DELETE' });
+check('messagerie : l\'acheteur ferme sa conversation', convDel.status === 204, `status=${convDel.status}`);
+const convGone = await api(`/rest/v1/conversations?select=id&id=eq.${convId}`, { token: temp.access_token });
+check('messagerie : conversation supprimée (messages en cascade)', (convGone.json || []).length === 0);
 const delFav = await api(`/rest/v1/favorites?user_id=eq.${tempId}`, { token: temp.access_token, method: 'DELETE' });
 check('nettoyage : favoris du test supprimés', delFav.status === 204, `status=${delFav.status}`);
 const delListing = await api(`/rest/v1/listings?slug=eq.${mySlug}`, { token: temp.access_token, method: 'DELETE' });

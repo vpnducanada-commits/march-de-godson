@@ -10,10 +10,12 @@ import {
 import type {
   AdminUser,
   Category,
+  Conversation,
   Listing,
   ListingFull,
   ListingQuery,
   Locality,
+  Message,
   PageResult,
   Profile,
   Report,
@@ -384,7 +386,14 @@ export async function publishListing(userId: string, input: PublishInput): Promi
     })
     .select('id')
     .single();
-  if (insErr || !created) throw toApiError(insErr, 'La publication a échoué. Réessayez.');
+  if (insErr || !created) {
+    if (insErr && /QUOTA_DEPASSE/i.test(insErr.message)) {
+      throw new ApiError(
+        'Limite atteinte : 20 annonces actives maximum par compte. Archivez ou supprimez une annonce pour en publier une nouvelle.',
+      );
+    }
+    throw toApiError(insErr, 'La publication a échoué. Réessayez.');
+  }
   const listingId = (created as { id: string }).id;
 
   // L'annonce n'est complète que si le stockage confirme chaque image.
@@ -705,8 +714,249 @@ export async function adminPromoteToAdmin(userId: string, adminId: string): Prom
 }
 
 // ============================================================
+// MESSAGERIE (acheteur ↔ vendeur, temps réel Supabase)
+// ============================================================
+
+/** Ouvre (ou retrouve) la conversation entre moi et le vendeur de l'annonce. */
+export async function openConversation(
+  userId: string,
+  listingId: string,
+  sellerId: string,
+): Promise<string> {
+  if (demoMode) throw new ApiError('La messagerie n\u2019est pas disponible en mode démo.');
+  const sb = requireClient();
+  const { data: existing } = await sb
+    .from('conversations')
+    .select('id')
+    .eq('listing_id', listingId)
+    .eq('buyer_id', userId)
+    .maybeSingle();
+  if (existing) return (existing as { id: string }).id;
+  const { data: created, error } = await sb
+    .from('conversations')
+    .insert({ listing_id: listingId, buyer_id: userId, seller_id: sellerId })
+    .select('id')
+    .maybeSingle();
+  if (error || !created) throw toApiError(error ?? new ApiError('conflit'), 'Impossible de démarrer la conversation.');
+  return (created as { id: string }).id;
+}
+
+export async function fetchConversations(userId: string): Promise<Conversation[]> {
+  if (demoMode) return [];
+  const sb = requireClient();
+  const { data, error } = await sb
+    .from('conversations')
+    .select(
+      'id, listing_id, buyer_id, seller_id, created_at, listings(title, slug, listing_images(storage_path)), messages(body, sender_id, created_at, read_at)',
+    )
+    .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`)
+    .order('created_at', { ascending: false });
+  if (error) throw toApiError(error, 'Conversations indisponibles.');
+  const rows = (data || []) as unknown as {
+    id: string;
+    listing_id: string;
+    buyer_id: string;
+    seller_id: string;
+    created_at: string;
+    listings: { title: string; slug: string; listing_images: { storage_path: string | null }[] } | null;
+    messages: { body: string; sender_id: string; created_at: string; read_at: string | null }[];
+  }[];
+  const convs: Conversation[] = [];
+  for (const c of rows) {
+    const sorted = (c.messages || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const imgs = (c.listings?.listing_images || []).map((im) => im.storage_path).filter(Boolean) as string[];
+    convs.push({
+      id: c.id,
+      listing_id: c.listing_id,
+      buyer_id: c.buyer_id,
+      seller_id: c.seller_id,
+      created_at: c.created_at,
+      listingTitle: c.listings?.title ?? 'Annonce',
+      listingSlug: c.listings?.slug ?? '',
+      listingImage: imgs.length ? storageUrlFor(imgs[0]) : null,
+      counterpart: null,
+      lastMessage: sorted.length
+        ? { body: sorted[sorted.length - 1].body, created_at: sorted[sorted.length - 1].created_at, sender_id: sorted[sorted.length - 1].sender_id }
+        : null,
+      unreadCount: c.messages.filter((m) => !m.read_at && m.sender_id !== userId).length,
+    });
+  }
+  // Interlocuteurs (profil du vendeur ou de l'acheteur selon mon rôle).
+  const counterpartIds = Array.from(
+    new Set(convs.map((c) => (c.buyer_id === userId ? c.seller_id : c.buyer_id))),
+  );
+  const profiles = await fetchProfilesByIds(counterpartIds);
+  for (const c of convs) {
+    c.counterpart = profiles.get(c.buyer_id === userId ? c.seller_id : c.buyer_id) ?? null;
+  }
+  // Tri par dernier message (les conversations vides gardent leur date de création).
+  return convs.sort((a, b) => (b.lastMessage?.created_at ?? b.created_at).localeCompare(a.lastMessage?.created_at ?? a.created_at));
+}
+
+export async function fetchMessages(conversationId: string): Promise<Message[]> {
+  if (demoMode) return [];
+  const sb = requireClient();
+  const { data, error } = await sb
+    .from('messages')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true })
+    .range(0, 499);
+  if (error) throw toApiError(error, 'Messages indisponibles.');
+  return (data || []) as Message[];
+}
+
+export async function sendMessage(userId: string, conversationId: string, body: string): Promise<Message> {
+  if (demoMode) throw new ApiError('La messagerie n\u2019est pas disponible en mode démo.');
+  const sb = requireClient();
+  const text = body.trim();
+  if (!text) throw new ApiError('Le message est vide.');
+  if (text.length > 2000) throw new ApiError('Message trop long (2000 caractères maximum).');
+  const { data, error } = await sb
+    .from('messages')
+    .insert({ conversation_id: conversationId, sender_id: userId, body: text })
+    .select('*')
+    .single();
+  if (error) throw toApiError(error, 'Envoi impossible.');
+  return data as Message;
+}
+
+/** Marque la conversation comme lue (mes messages reçus non lus). */
+export async function markConversationRead(conversationId: string): Promise<void> {
+  if (demoMode) return;
+  const sb = requireClient();
+  await sb
+    .from('messages')
+    .update({ read_at: new Date().toISOString() })
+    .eq('conversation_id', conversationId)
+    .is('read_at', null)
+    .then(() => undefined, () => undefined);
+}
+
+/** Nombre de messages non lus (toutes conversations confondues). */
+export async function fetchUnreadCount(): Promise<number> {
+  if (demoMode) return 0;
+  const sb = requireClient();
+  const { data, error } = await sb.rpc('unread_count');
+  if (error) return 0;
+  return typeof data === 'number' ? data : Number((data as { unread_count?: number } | null)?.unread_count ?? 0);
+}
+
+// ---------------------------------------------------------------------------
+// Temps réel — canal unique + listeners multiples (refcounting).
+//
+// Supabase Realtime interdit d'ajouter un callback postgres_changes à un canal
+// déjà abonné. Le header ET la page Messages s'abonnent aux nouveaux messages
+// globaux : on partage donc UN canal, et chaque composant enregistre son
+// listener. Le canal n'est supprimé que quand plus personne ne l'écoute.
+// ---------------------------------------------------------------------------
+type RealtimeChannel = ReturnType<ReturnType<typeof requireClient>['channel']>;
+// Registres module-level : les callbacks de canal y distribuent les messages,
+// ce qui permet de réutiliser un canal existant sans jamais appeler .on()
+// après subscribe() (interdit par Supabase Realtime).
+const globalMsgListeners = new Set<(m: Message) => void>();
+let globalMsgChannel: RealtimeChannel | null = null;
+const convListeners = new Map<string, Set<(m: Message) => void>>();
+const convChannels = new Map<string, RealtimeChannel>();
+
+function dispatch(listeners: Set<(m: Message) => void> | undefined, m: Message, ctx: string): void {
+  if (!listeners) return;
+  listeners.forEach((fn) => {
+    try {
+      fn(m);
+    } catch (err) {
+      console.error(`Erreur listener messagerie (${ctx})`, err);
+    }
+  });
+}
+
+function ensureGlobalChannel(sb: ReturnType<typeof requireClient>): void {
+  if (globalMsgChannel && sb.realtime.channels.includes(globalMsgChannel)) return;
+  // Un canal du même topic existe déjà (fermeture en attente, StrictMode, etc.) :
+  // on le réutilise tel quel — son callback distribue déjà vers le registre.
+  const existing = sb.realtime.channels.find((ch) => ch.topic.endsWith('messages:global'));
+  if (existing) {
+    globalMsgChannel = existing;
+    return;
+  }
+  globalMsgChannel = sb
+    .channel('messages:global')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) =>
+      dispatch(globalMsgListeners, payload.new as Message, 'global'),
+    )
+    .subscribe();
+}
+
+/** Abonnement temps réel aux nouveaux messages d'une conversation. Retourne le désabonnement. */
+export function subscribeToConversation(
+  conversationId: string,
+  onMessage: (m: Message) => void,
+): () => void {
+  if (demoMode) return () => undefined;
+  const sb = requireClient();
+  let channel = convChannels.get(conversationId);
+  if (!channel || !sb.realtime.channels.includes(channel)) {
+    channel = sb.realtime.channels.find((ch) => ch.topic.endsWith(`messages:${conversationId}`));
+  }
+  if (!channel) {
+    channel = sb
+      .channel(`messages:${conversationId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
+        (payload) => dispatch(convListeners.get(conversationId), payload.new as Message, `conversation ${conversationId}`),
+      )
+      .subscribe();
+    convChannels.set(conversationId, channel);
+  }
+  let listeners = convListeners.get(conversationId);
+  if (!listeners) {
+    listeners = new Set();
+    convListeners.set(conversationId, listeners);
+  }
+  listeners.add(onMessage);
+  return () => {
+    listeners.delete(onMessage);
+    if (listeners.size === 0) {
+      void sb.removeChannel(channel);
+      convChannels.delete(conversationId);
+    }
+  };
+}
+
+/** Abonnement temps réel global (badge « non lus » du header, liste de la page Messages). Retourne le désabonnement. */
+export function subscribeToNewMessages(onAny: (m: Message) => void): () => void {
+  if (demoMode) return () => undefined;
+  const sb = requireClient();
+  ensureGlobalChannel(sb);
+  globalMsgListeners.add(onAny);
+  return () => {
+    globalMsgListeners.delete(onAny);
+    if (globalMsgListeners.size === 0 && globalMsgChannel && sb.realtime.channels.includes(globalMsgChannel)) {
+      void sb.removeChannel(globalMsgChannel);
+      globalMsgChannel = null;
+    }
+  };
+}
+
+// ============================================================
 // PROFIL
 // ============================================================
+
+/**
+ * L'e-mail du profil est-il confirmé (Supabase Auth) ?
+ * Indicateur honnête : basé sur la confirmation réelle de l'adresse,
+ * jamais un badge marketing.
+ */
+export async function isEmailConfirmed(profileId: string): Promise<boolean> {
+  if (demoMode) return false;
+  const sb = requireClient();
+  const { data, error } = await sb.rpc('profile_email_confirmed', { p_profile_id: profileId });
+  if (error) return false;
+  return typeof data === 'boolean'
+    ? data
+    : Boolean((data as { profile_email_confirmed?: boolean } | null)?.profile_email_confirmed);
+}
 
 export async function fetchOwnProfile(userId: string): Promise<Profile | null> {
   const sb = requireClient();

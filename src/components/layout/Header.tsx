@@ -5,7 +5,7 @@ import { Icon } from '../Icon';
 import { SearchBar } from '../SearchBar';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { fetchLocalities } from '../../lib/api';
+import { demoMode, fetchLocalities, fetchUnreadCount, subscribeToNewMessages } from '../../lib/api';
 import type { Locality } from '../../lib/types';
 
 export function Header() {
@@ -16,11 +16,27 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
   const userRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchLocalities().then(setLocalities).catch(() => undefined);
   }, []);
+
+  // Badge « messages non lus » (temps réel).
+  const refreshUnread = () => {
+    fetchUnreadCount().then(setUnread).catch(() => undefined);
+  };
+  useEffect(() => {
+    if (!session || demoMode) {
+      setUnread(0);
+      return;
+    }
+    refreshUnread();
+    const unsub = subscribeToNewMessages(() => refreshUnread());
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -73,6 +89,16 @@ export function Header() {
           <Link to="/compte/favoris" className="icon-btn header__fav" aria-label="Mes favoris">
             <Icon name="heart" size={20} />
           </Link>
+          {session && !demoMode && (
+            <Link
+              to="/messages"
+              className="icon-btn header__msg"
+              aria-label={unread ? `Messages — ${unread} non-lus` : 'Messages'}
+            >
+              <Icon name="send" size={20} />
+              {unread > 0 && <span className="header__msg-badge">{unread > 9 ? '9+' : unread}</span>}
+            </Link>
+          )}
 
           {session && profile ? (
             <div className="header__user" ref={userRef}>
@@ -155,6 +181,12 @@ export function Header() {
           <NavLink to="/compte/favoris" onClick={() => setMenuOpen(false)}>
             <Icon name="heart" size={18} /> Mes favoris
           </NavLink>
+          {session && !demoMode && (
+            <NavLink to="/messages" onClick={() => setMenuOpen(false)}>
+              <Icon name="send" size={18} />
+              {unread > 0 ? `Messages (${unread})` : 'Messages'}
+            </NavLink>
+          )}
           <NavLink to="/faq" onClick={() => setMenuOpen(false)}>
             <Icon name="info" size={18} /> Aide & FAQ
           </NavLink>

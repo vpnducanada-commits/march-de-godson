@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/ui/Modal';
 import { Spinner } from '../components/ui/Spinner';
@@ -16,6 +16,9 @@ import {
   fetchFavorites,
   renewListing,
   notifyEmail,
+  openConversation,
+  isEmailConfirmed,
+  demoMode,
 } from '../lib/api';
 import type { ListingFull, Category } from '../lib/types';
 import { ACCOUNT_TYPE_LABELS, CONDITION_LABELS, isListingExpired } from '../lib/types';
@@ -37,6 +40,7 @@ export default function ListingDetail() {
   const { slug } = useParams<{ slug: string }>();
   const { session, isAdmin } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [item, setItem] = useState<ListingFull | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [activeImg, setActiveImg] = useState(0);
@@ -50,6 +54,8 @@ export default function ListingDetail() {
   const [reportDetails, setReportDetails] = useState('');
   const [reportBusy, setReportBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [msgBusy, setMsgBusy] = useState(false);
+  const [sellerVerified, setSellerVerified] = useState(false);
 
   const loadListing = useCallback(() => {
     if (!slug) return;
@@ -109,6 +115,20 @@ export default function ListingDetail() {
       .catch(() => { if (active) setParentCat(null); });
     return () => { active = false; };
   }, [item?.category?.parent_id]);
+
+  // Indicateur honnête : e-mail du vendeur confirmé (Supabase Auth).
+  const sellerId = item?.seller?.id;
+  useEffect(() => {
+    if (!sellerId) {
+      setSellerVerified(false);
+      return;
+    }
+    let active = true;
+    isEmailConfirmed(sellerId)
+      .then((v) => { if (active) setSellerVerified(v); })
+      .catch(() => { if (active) setSellerVerified(false); });
+    return () => { active = false; };
+  }, [sellerId]);
 
   usePageMeta(
     item ? item.listing.title : 'Annonce',
@@ -239,6 +259,20 @@ export default function ListingDetail() {
       toast('error', e instanceof Error ? e.message : 'Signalement impossible.');
     } finally {
       setReportBusy(false);
+    }
+  };
+
+  // Ouvre (ou retrouve) la conversation avec le vendeur de cette annonce.
+  const onMessageSeller = async () => {
+    if (!session?.user || !item || msgBusy) return;
+    setMsgBusy(true);
+    try {
+      const convId = await openConversation(session.user.id, item.listing.id, item.listing.seller_id);
+      navigate(`/messages/${convId}`);
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : 'Impossible de démarrer la conversation.');
+    } finally {
+      setMsgBusy(false);
     }
   };
 
@@ -388,6 +422,11 @@ export default function ListingDetail() {
           <div className="detail__contact">
             <h2 className="detail__h">Contacter le vendeur</h2>
             <div className="detail__contact-btns">
+              {session && !demoMode && (
+                <button type="button" className="btn btn--primary" onClick={() => void onMessageSeller()} disabled={msgBusy}>
+                  <Icon name="send" size={17} /> {msgBusy ? 'Ouverture…' : 'Message le vendeur'}
+                </button>
+              )}
               {wa && (
                 <a className="btn btn--whatsapp" href={wa} target="_blank" rel="noopener noreferrer">
                   <Icon name="whatsapp" size={19} /> Discuter sur WhatsApp
@@ -453,6 +492,11 @@ export default function ListingDetail() {
                   <Link to={`/vendeur/${seller.id}`} className="seller-box__name">
                     {seller.display_name || 'Vendeur'}
                     {seller.is_demo && <span className="badge badge--demo">Démo</span>}
+                    {sellerVerified && !seller.is_demo && (
+                      <span className="badge badge--verified">
+                        <Icon name="check" size={11} /> E-mail vérifié
+                      </span>
+                    )}
                   </Link>
                   <p className="seller-box__meta">
                     {ACCOUNT_TYPE_LABELS[seller.account_type] || 'Particulier'}

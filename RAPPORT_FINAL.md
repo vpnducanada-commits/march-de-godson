@@ -1,7 +1,7 @@
 # GODSON Marketplace — Rapport final de livraison
 
-**Date** : 18 octobre 2026 — **mise à jour v1.3 le 19 octobre 2026**
-**Production** : https://godson-marketplace.vercel.app (en ligne depuis le 18/10, v1.3 le 19/10)
+**Date** : 18 octobre 2026 — **mise à jour v1.4 le 19 octobre 2026**
+**Production** : https://godson-marketplace.vercel.app (en ligne depuis le 18/10, v1.4 le 19/10)
 **Projet Supabase** : `uzzxtwaaqliwqjzudqjz` (`https://uzzxtwaaqliwqjzudqjz.supabase.co`)
 **Légende** : ✅ Fait et testé · ✔️ Fait (vérifié par build/inspection, pas de test d'usage) · 🔧 Preparé (prêt, en attente d'un acte extérieur : domaine, compte, import…)
 
@@ -189,14 +189,65 @@ Batterie de tests REST exécutée ce jour (résultats) :
   (300 e-mails/jour sans carte) → adresse expéditrice + SPF → clé API → secrets
   `BREVO_API_KEY` + `MAIL_FROM` sur la fonction.
 
+## 21. v1.4 — Messagerie acheteur ↔ vendeur temps réel — ✅ Fait et testé (19/10)
+
+- **Migrations 007 + 008** (appliquées) : tables `conversations` (unique `listing_id`+`buyer_id`)
+  et `messages` (check 1–2000 caractères) ; RLS : lecture/écriture **participants uniquement** ;
+  insertion de conversation **acheteur non banni uniquement, jamais avec soi-même** ;
+  **anti-usurpation** : `sender_id` doit être `auth.uid()` ; publication Realtime
+  `supabase_realtime` → `messages` ; RPC `unread_count()`. Migration 009 : fermeture de la
+  conversation par l'acheteur (messages en cascade).
+- **Interface** : bouton « Message le vendeur » sur la fiche annonce (session requise) →
+  page `/messages` (liste) + `/messages/:id` (fil) ; mobile : liste ↔ fil avec retour ;
+  bureau ≥ 900 px : deux volets ; temps réel sans rechargement ; auto-scroll ; marquage « lu »
+  automatique ; compteur de non-lus + badge dans le header (temps réel global).
+- **Temps réel robuste** : un seul canal Realtime partagé (header + page) avec **registre de
+  listeners et refcounting** — corrige un crash réel détecté en test (`cannot add
+  postgres_changes callbacks after subscribe()`), le canal n'étant supprimé que quand plus
+  personne ne l'écoute.
+- **Testé** : ouverture par l'acheteur, unicité (2e tentative → 409), invisibilité par anonyme
+  ET par un tiers admin, refus de conversation avec soi-même, message envoyé/lus, message vide
+  refusé (contrainte), **usurpation de `sender_id` refusée (RLS 403)**, réponse du vendeur,
+  compteur de non-lus 1 → 0 après marquage lu, le vendeur ne peut pas supprimer la conversation
+  de l'acheteur, fermeture par l'acheteur (cascade vérifiée), E2E : bouton visible en session,
+  clic, redirection, conversation listée. Données de test nettoyées en fin de run.
+
+## 22. v1.4 — Badge « E-mail vérifié » (réel) — ✅ Fait et testé (19/10)
+
+- RPC `profile_email_confirmed(uuid)` (SECURITY DEFINER) : renvoie si `is_email_confirmed`
+  dans `auth.users` — la **confirmation réelle de l'adresse** par Supabase Auth, pas un statut
+  marketing.
+- Badge « E-mail vérifié » sur la fiche annonce (section vendeur) et sur le profil vendeur ;
+  masqué pour le compte démo. N'apparaît que si l'adresse est effectivement confirmée.
+
+## 23. v1.4 — Quota anti-spam 20 annonces — ✅ Fait et testé (19/10)
+
+- **Trigger en base** `listings_quota` : tout INSERT de listing est bloqué (erreur
+  `QUOTA_DEPASSE`) si le vendeur a déjà ≥ 20 annonces `active`/`pending`. Impossibilité de
+  contourner par le navigateur (blocage côté serveur). Message UX clair à la publication.
+- **Testé** : 20 annonces acceptées, la 21e refusée avec `QUOTA_DEPASSE` (400), annonces de
+  test supprimées en fin de run.
+
+## 24. v1.4 — Export CSV admin + étude paiements v2 — ✅ Fait (19/10)
+
+- **Export CSV** (onglet Annonces de l'admin) : toutes les annonces, pagination 50/page
+  (cap 40 pages), BOM UTF-8 + séparateur `;` (compatible Excel FR), échappement des guillemets.
+- **Étude paiements** `PAIEMENTS_V2_OPTIONS.md` : Airtel Money (API officielle
+  developers.airtel.africa + sandbox, commission marchand ~1,2–1,8 % selon source, onboarding
+  3–6 sem.), Moov Money (pas d'API self-service publique ; « Moov Money Online », compte
+  marchand < 48 h, plafond 1 M FCFA/jour, contrat partenaire), agrégateurs locaux (PVit
+  2–2,5 % ; SingPay 0 % ≤ 25 M FCFA). **Aucun code payant écrit, aucun prix officiel inventé** —
+  ordres de grandeur datés avec 16 sources citées ; feuille de route en 3 phases.
+
 ---
 
 ### Ce qui est immédiatement utilisable
-- **Site en production** : https://godson-marketplace.vercel.app — v1.3 en ligne, PWA installable
-  (service worker vérifié), analytics actif, données structurées SEO sur chaque fiche.
+- **Site en production** : https://godson-marketplace.vercel.app — **v1.4 en ligne**, PWA
+  installable (service worker vérifié), analytics actif, données structurées SEO sur chaque
+  fiche, messagerie temps réel, badge e-mail vérifié, quota 20 annonces, export CSV admin.
 - Base saine : 10 annonces démo labellisées, comptes démo + admin fonctionnels.
-- **Qualité** : build propre (tsc strict, sans avertissement), **66 assertions de tests vertes
-  (41 API + 25 E2E)**, CI GitHub Actions verte à chaque push, sitemap dynamique à la build.
-- **Frais de catalogue** : expiration 90 jours + reprise gratuite, testée (RLS + RPC).
+- **Qualité** : build propre (tsc strict, sans avertissement), **90 assertions de tests vertes
+  (62 API + 28 E2E)**, CI GitHub Actions verte à chaque push, sitemap dynamique à la build.
 - Il ne reste que des actions **externes** (secrets CI GitHub, clé Brevo, DSN Sentry, DNS
-  godsonmarket.com, changement du mot de passe admin) — aucune tâche de développement ouverte.
+  godsonmarket.com, changement du mot de passe admin, décision paiements v2) — aucune tâche
+  de développement ouverte.

@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon';
 import { Spinner } from '../components/ui/Spinner';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ListingCard } from '../components/ListingCard';
-import { fetchSeller, fetchSellerListings } from '../lib/api';
+import { fetchSeller, fetchSellerListings, isEmailConfirmed } from '../lib/api';
 import type { ListingFull, Profile } from '../lib/types';
 import { ACCOUNT_TYPE_LABELS } from '../lib/types';
 import { formatDate } from '../lib/format';
@@ -15,8 +15,22 @@ export default function SellerProfile() {
   const [seller, setSeller] = useState<Profile | null | undefined>(undefined);
   const [items, setItems] = useState<ListingFull[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [verified, setVerified] = useState(false);
 
   usePageMeta(seller ? `Vendeur : ${seller.display_name || 'profil'}` : 'Profil vendeur');
+
+  // Indicateur honnête : e-mail confirmé (Supabase Auth).
+  useEffect(() => {
+    if (!seller) {
+      setVerified(false);
+      return;
+    }
+    let active = true;
+    isEmailConfirmed(seller.id)
+      .then((v) => { if (active) setVerified(v); })
+      .catch(() => { if (active) setVerified(false); });
+    return () => { active = false; };
+  }, [seller]);
 
   useEffect(() => {
     if (!id) return;
@@ -54,6 +68,11 @@ export default function SellerProfile() {
           <h1 className="page-title">
             {seller!.display_name || 'Vendeur'}
             {seller!.is_demo && <span className="badge badge--demo">Compte démo</span>}
+            {verified && !seller!.is_demo && (
+              <span className="badge badge--verified">
+                <Icon name="check" size={11} /> E-mail vérifié
+              </span>
+            )}
           </h1>
           <p className="seller-head__meta">
             <Icon name="store" size={15} /> {ACCOUNT_TYPE_LABELS[seller!.account_type] || 'Particulier'}

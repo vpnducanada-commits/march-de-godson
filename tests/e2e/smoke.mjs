@@ -201,6 +201,34 @@ try {
   await d.goto(BASE + '/publier', { waitUntil: 'networkidle', timeout: 30000 });
   await d.waitForTimeout(800);
   check('publication (anonyme) : redirection vers connexion', /connexion/.test(d.url()), d.url());
+
+  // ---------- Messagerie (session admin, après le test anonyme) ----------
+  await login(d, ADMIN);
+  await d.goto(BASE + '/annonce/demo-iphone-13-pro', { waitUntil: 'networkidle', timeout: 30000 });
+  await d.waitForTimeout(800);
+  const msgBtn = d.locator('button:has-text("Message le vendeur")');
+  check('messagerie : bouton « Message le vendeur » visible en session', (await msgBtn.count()) >= 1);
+  await msgBtn.first().click();
+  await d.waitForTimeout(1500);
+  check('messagerie : redirection vers la conversation', /\/messages\/[\w-]+/.test(d.url()), d.url());
+  check('messagerie : la conversation est listée (titre de l\'annonce)', (await d.getByText('iPhone 13 Pro 256 Go').count()) >= 1);
+  // Nettoyage : l'admin (acheteur) ferme la conversation via REST.
+  const convMatch = d.url().match(/\/messages\/([\w-]+)/);
+  if (convMatch && env.VITE_SUPABASE_URL) {
+    const tok = await (
+      await fetch(`${env.VITE_SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: ADMIN.email, password: ADMIN.password }),
+      })
+    ).json();
+    if (tok?.access_token) {
+      await fetch(`${env.VITE_SUPABASE_URL}/rest/v1/conversations?id=eq.${convMatch[1]}`, {
+        method: 'DELETE',
+        headers: { apikey: env.VITE_SUPABASE_PUBLISHABLE_KEY, Authorization: `Bearer ${tok.access_token}` },
+      }).catch(() => undefined);
+    }
+  }
 } finally {
   await browser.close();
 }

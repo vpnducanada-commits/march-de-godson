@@ -17,6 +17,7 @@ import AuthPages from './pages/AuthPages';
 import SellerProfile from './pages/SellerProfile';
 import Dashboard from './pages/Dashboard';
 import Favorites from './pages/Favorites';
+import Messages from './pages/Messages';
 import Settings from './pages/Settings';
 import Admin from './pages/Admin';
 import StaticPage, { StaticContent } from './pages/StaticPage';
@@ -101,6 +102,8 @@ export default function App() {
             <Route path="/mot-de-passe" element={<AuthPages mode="forgot" />} />
             <Route path="/compte" element={<RequireAuth><Dashboard /></RequireAuth>} />
             <Route path="/compte/favoris" element={<RequireAuth><Favorites /></RequireAuth>} />
+            <Route path="/messages" element={<RequireAuth><Messages /></RequireAuth>} />
+            <Route path="/messages/:id" element={<RequireAuth><Messages /></RequireAuth>} />
             <Route path="/compte/parametres" element={<RequireAuth><Settings /></RequireAuth>} />
             <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
             <Route path="/faq" element={<StaticPage content={StaticContent.faq} />} />

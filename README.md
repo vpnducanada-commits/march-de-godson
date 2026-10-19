@@ -49,18 +49,23 @@ figure sur la page **À propos** (`src/pages/StaticPage.tsx`).
 Deux suites, toutes deux branchées sur l'environnement Supabase de `.env` :
 
 ```bash
-npm run test:api       # 41 assertions API / RLS / sécurité (Node, zéro dépendance)
+npm run test:api       # 62 assertions API / RLS / sécurité (Node, zéro dépendance)
 npm run test:e2e:install   # une fois : télécharge Chromium
-npm run test:e2e       # 25 assertions navigateur (Playwright) — nécessite `npm run dev`
+npm run test:e2e       # 28 assertions navigateur (Playwright) — nécessite `npm run dev`
 ```
 
 - `tests/api.test.mjs` — auth (login démo/admin, refus de mauvais mot de passe), données,
   recherche insensible à la casse, tri prix avec nulls, joins FK, RLS (insertion anonyme,
   modification croisée d'annonces, usurpation de `user_id` dans les favoris, journal d'audit,
-  droits Storage par dossier), et nettoyage intégral en fin de run.
+  droits Storage par dossier), **messagerie** (ouverture par l'acheteur, unicité,
+  invisibilité par les tiers, anti-usurpation de `sender_id`, réponse du vendeur,
+  compteur de non-lus, marquage « lu », fermeture par l'acheteur) et **quota 20 annonces**
+  (21e refusée), et nettoyage intégral en fin de run.
 - `tests/e2e/smoke.mjs` — accueil mobile/desktop, recherche + état vide, connexion réelle,
   favoris, gating admin, **visibilité et clics réels des onglets** (compte + admin), 404,
-  fiche annonce (prix FCFA, boutons Appeler/WhatsApp, image), redirection publication.
+  fiche annonce (prix FCFA, boutons Appeler/WhatsApp, image), **messagerie** (bouton
+  « Message le vendeur », redirection vers la conversation, titre listé), redirection
+  publication.
 - Les deux suites créent/consomment des données réelles : elles suppriment tout ce qu'elles
   créent (sauf l'utilisateur temporaire de la suite API, affiché en fin de run — sa
   suppression requiert du SQL : `delete from auth.users where id = '<id>';`).
@@ -72,6 +77,22 @@ npm run test:e2e       # 25 assertions navigateur (Playwright) — nécessite `n
 Production (Vercel) : **https://godson-marketplace.vercel.app**
 
 Guide domaine gratuit (eu.org) : voir [`GUIDE_DOMAINE_EU_ORG.md`](GUIDE_DOMAINE_EU_ORG.md).
+
+## v1.4 — Messagerie, confiance, admin (19/10/2026)
+
+| Fonctionnalité | Détail |
+|---|---|
+| **Messagerie acheteur ↔ vendeur** | Bouton « Message le vendeur » sur la fiche annonce → conversation 1:1 liée à l'annonce (une seule par annonce/acheteur). Temps réel **Supabase Realtime** (nouveaux messages instantanés, sans rechargement), mobile (liste ↔ fil) et bureau (2 volets), compteur de non-lus + badge dans le header, marquage « lu », l'acheteur peut fermer sa conversation |
+| **Sécurité messagerie (en base)** | RLS : seuls les participants lisent/écrivent ; **impossible de forger l'expéditeur** (`sender_id = auth.uid()`, migration 008) ; un non-participant ne voit rien ni n'écrit ; message vide interdit (1–2000 caractères) |
+| **Badge « E-mail vérifié »** | Indicateur honnête sur la fiche annonce et le profil vendeur : basé sur la **confirmation réelle de l'adresse** dans Supabase Auth (RPC `profile_email_confirmed`), jamais un badge marketing. Masqué pour le compte démo |
+| **Quota anti-spam (20 annonces)** | Trigger en base : un compte ne peut pas avoir plus de 20 annonces `active`/`pending` ; la 21e est refusée avec un message clair à l'utilisateur. Le contournement par le navigateur est impossible (blocage côté serveur) |
+| **Export CSV (admin)** | Bouton « Exporter CSV » dans l'onglet Anonces : toutes les annonces (pagination 50/page, BOM UTF-8, séparateur `;`) téléchargeables en un clic — reporting sans SQL |
+| **Étude paiements v2** | `PAIEMENTS_V2_OPTIONS.md` : Airtel Money (API officielle, sandbox, onboarding 3–6 sem.), Moov Money (Moov Money Online, ~48 h, contrat partenaire), agrégateurs locaux (PVit, SingPay) — frais réels cités avec sources, **aucun code payant inventé** |
+
+**Architecture messagerie** : tables `conversations` (unique `listing_id`+`buyer_id`) et
+`messages` (publication Realtime `supabase_realtime`) ; les abonnements côté client partagent
+un canal unique avec registre de listeners (refcounting) — un composant peut s'abonner sans
+jamais ré-ouvrir un canal déjà actif (exigence Supabase Realtime).
 
 ## v1.3 — Améliorations (19/10/2026)
 
@@ -136,6 +157,10 @@ Migrations versionnées dans `supabase/migrations/` (à appliquer dans l'ordre, 
 | `003_demo_data.sql` | Compte démo + 10 annonces de démonstration (`is_demo = true`) |
 | `004_admin_rpc.sql` | RPC `admin_list_users()` (SECURITY DEFINER, autorisation en base) |
 | `005_storage_public_bucket.sql` | Bucket images public + purge admin des fichiers |
+| `006_listing_expiration.sql` | Expiration 90 j : `expires_at` + RPC `renew_listing` + forçage admin |
+| `007_messaging_quota.sql` | **Messagerie** : tables `conversations`/`messages` + RLS participants + temps réel ; **quota 20 annonces actives/compte** (trigger) ; RPC `profile_email_confirmed` |
+| `008_messaging_hardening.sql` | Anti-usurpation : `sender_id = auth.uid()` ; RPC `unread_count()` |
+| `009_conversation_delete.sql` | L'acheteur peut fermer sa conversation (messages en cascade) |
 
 Retrait des données de démonstration (sans toucher aux données réelles) :
 

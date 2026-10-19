@@ -31,6 +31,32 @@ export interface Profile {
 }
 
 export type ListingStatus = 'draft' | 'pending' | 'active' | 'refused' | 'archived';
+
+// ---------- Messagerie ----------
+
+export interface Message {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  read_at: string | null;
+}
+
+/** Conversation enrichie côté client (dernier message, non-lus, annonce, interlocuteur). */
+export interface Conversation {
+  id: string;
+  listing_id: string;
+  buyer_id: string;
+  seller_id: string;
+  created_at: string;
+  listingTitle: string;
+  listingSlug: string;
+  listingImage: string | null;
+  counterpart: Profile | null;
+  lastMessage: { body: string; created_at: string; sender_id: string } | null;
+  unreadCount: number;
+}
 export type ListingCondition = 'neuf' | 'comme_neuf' | 'bon_etat' | 'a_renover';
 
 export interface Listing {

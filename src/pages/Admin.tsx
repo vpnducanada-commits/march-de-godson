@@ -114,6 +114,52 @@ export default function Admin() {
     }
   };
 
+  // Export CSV des annonces (respecte le filtre de statut courant).
+  const [exporting, setExporting] = useState(false);
+  const exportCsv = async () => {
+    if (!session?.user || exporting) return;
+    setExporting(true);
+    try {
+      const all: ListingFull[] = [];
+      let p = 1;
+      for (;;) {
+        const r = await adminFetchListings({ status: statusFilter || undefined, page: p, pageSize: 50 });
+        all.push(...r.items);
+        if (all.length >= r.total || r.items.length === 0) break;
+        p += 1;
+        if (p > 40) break; // garde-fou : 2000 lignes max
+      }
+      const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const headers = ['slug', 'titre', 'categorie', 'localite', 'prix_xaf', 'statut', 'creee_le', 'vendeur'];
+      const rows = all.map((i) =>
+        [
+          i.listing.slug,
+          i.listing.title,
+          i.category?.name ?? '',
+          i.city?.name ?? '',
+          i.listing.price ?? '',
+          i.listing.status,
+          i.listing.created_at,
+          i.seller?.display_name ?? '',
+        ]
+          .map(esc)
+          .join(';'),
+      );
+      const csv = '\uFEFF' + [headers.join(';'), ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `godson-annonces-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+      toast('success', `${all.length} annonce(s) exportée(s) au format CSV.`);
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : 'Export impossible.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const reportAction = async (id: string, status: string) => {
     try {
       await adminUpdateReport(id, status, session.user.id);
@@ -214,6 +260,9 @@ export default function Admin() {
               <option value="archived">Archivées</option>
             </select>
             <span className="admin-toolbar__count">{total} annonces</span>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => void exportCsv()} disabled={exporting}>
+              <Icon name="download" size={14} /> {exporting ? 'Export en cours…' : 'Exporter CSV'}
+            </button>
           </div>
           {!listings && <Spinner label="Chargement…" />}
           {listings && listings.length === 0 && <EmptyState icon="tag" title="Aucune annonce" />}
