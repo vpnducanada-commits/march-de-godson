@@ -99,8 +99,14 @@ export const StaticContent: Record<'faq' | 'about' | 'security' | 'terms' | 'pri
             <dt>Peut-on payer en ligne sur la plateforme ?</dt>
             <dd>
               Non. GODSON Marketplace est une plateforme de mise en relation : l'acheteur et
-              le vendeur négocient et règlent directement entre eux (espèces, mobile money,
-              virement…). Nous ne prenons jamais en charge les paiements.
+              le vendeur négocient et règlent directement entre eux. Nous ne prenons jamais en
+              charge les paiements.
+            </dd>
+            <dt>Quel moyen de paiement est recommandé ?</dt>
+            <dd>
+              <strong>Airtel Money</strong>, convenu directement avec le vendeur. NB : ne payez
+              que si vous avez confiance au vendeur — en cas de doute, ou si vous ne connaissez
+              pas son identité, payez à la livraison après avoir vu l'article.
             </dd>
             <dt>La plateforme est-elle responsable des transactions ?</dt>
             <dd>
@@ -167,6 +173,15 @@ export const StaticContent: Record<'faq' | 'about' | 'security' | 'terms' | 'pri
         heading: 'Le paiement',
         body: (
           <ul>
+            <li>
+              Le moyen de paiement le plus courant au Gabon est <strong>Airtel Money</strong> :
+              convenez-en directement avec le vendeur.
+            </li>
+            <li>
+              <strong>NB : ne payez que si vous avez confiance au vendeur</strong> — en cas de
+              doute, ou si vous ne connaissez pas l'identité du vendeur, payez à la livraison,
+              après avoir vu et vérifié l'article.
+            </li>
             <li>Privilégiez le <strong>paiement à la remise</strong>, en main propre.</li>
             <li>Pour les objets de valeur, un <strong>reçu écrit</strong> signé par les deux parties protège tout le monde.</li>
             <li>Les paiements mobile money s'effectuent <strong>uniquement face à face</strong> après vérification du produit.</li>

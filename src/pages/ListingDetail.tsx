@@ -469,9 +469,12 @@ export default function ListingDetail() {
             <div className="detail__safety">
               <Icon name="shield" size={16} />
               <p>
-                <strong>Transactez en toute sécurité.</strong> Ne payez jamais à l'avance par
-                virement ou mobile money avant d'avoir vu l'article. Privilégiez les rencontres
-                en lieu public et vérifiez le produit avant l'achat.
+                <strong>Transactez en toute sécurité.</strong> Le règlement se fait le plus
+                souvent par <strong>Airtel Money</strong>, convenu directement entre acheteur
+                et vendeur. <strong>NB : ne payez que si vous avez confiance au vendeur — en
+                cas de doute, ou si vous ne connaissez pas l'identité du vendeur, payez à la
+                livraison</strong>, après avoir vu et vérifié l'article. Privilégiez les
+                rencontres en lieu public.
               </p>
             </div>
           </div>

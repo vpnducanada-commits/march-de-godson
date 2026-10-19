@@ -1,6 +1,23 @@
 # Étude — Paiements en ligne v2 (Airtel Money / Moov Money)
 
-> **Statut : ÉTUDE (aucun code de paiement écrit, aucun prix officiel inventé).**
+> **DÉCISION (19 octobre 2026, validée par l'exploitant) : le paiement est confirmé sur
+> Airtel Money — Option A (Airtel Money en direct, API officielle developers.airtel.africa).**
+>
+> Conséquences et suite :
+> 1. **Côté exploitant (Phase 0, maintenant)** : préparer le dossier KYB (RCCM, NIF, RIB,
+>    statuts, description de l'activité) et ouvrir le compte marchand Airtel Money (délai
+>    constaté : 3–6 semaines). C'est l'action qui conditionne tout le reste.
+> 2. **Côté développement (dès réception des identifiants API)** : table `payments` +
+>    edge functions `payment-initiate` / `payment-webhook` (HMAC, idempotence, jamais de
+>    secret côté navigateur) + bouton « Payer par Airtel Money » sur la fiche annonce —
+>    bouton **masqué tant que les identifiants ne sont pas branchés** (pas de bouton
+>    décoratif, principe d'honnêteté produit).
+> 3. **Immédiatement en ligne (v1.6)** : le site reste en négociation directe et affiche le
+>    **NB d'avertissement acheteur** — « ne payez que si vous avez confiance au vendeur ;
+>    en cas de doute, ou si vous ne connaissez pas son identité, payez à la livraison » —
+>    sur la fiche annonce, la FAQ et la page Conseils de sécurité.
+
+> **Statut : ÉTUDE + DÉCISION PRISE (aucun code de paiement écrit, aucun prix officiel inventé).**
 > Date : 19 octobre 2026. Devise : FCFA (XAF, zone CEMAC — BEAC/COBAC).
 > Toute intégration réelle commencera uniquement après signature d'un compte marchand
 > et obtention de vrais identifiants API.
