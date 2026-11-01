@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>GODSON Marketplace — Le marché gabonais, à portée de clic</title>
+    <meta
+      name="description"
+      content="GODSON Marketplace : trouvez et vendez des produits et services au Gabon. Annonces au FCFA à Libreville, Port-Gentil, Franceville et partout au Gabon."
+    />
+    <meta name="theme-color" content="#0A1633" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png" />
+    <link rel="preconnect" href="%VITE_SUPABASE_URL%" crossorigin />
+    <link rel="dns-prefetch" href="%VITE_SUPABASE_URL%" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="GODSON Marketplace" />
+    <meta property="og:title" content="GODSON Marketplace — Le marché gabonais, à portée de clic" />
+    <meta
+      property="og:description"
+      content="Achetez, vendez et trouvez des services au Gabon. Annonces au FCFA, de Libreville à Port-Gentil."
+    />
+    <meta property="og:url" content="%VITE_SITE_URL%/" />
+    <meta property="og:image" content="%VITE_SITE_URL%/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="GODSON Marketplace — Le marché gabonais, à portée de clic" />
+    <meta
+      name="twitter:description"
+      content="Achetez, vendez et trouvez des services au Gabon. Annonces au FCFA, de Libreville à Port-Gentil."
+    />
+    <meta name="twitter:image" content="%VITE_SITE_URL%/og-image.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "GODSON Marketplace",
+        "url": "%VITE_SITE_URL%/",
+        "logo": "%VITE_SITE_URL%/logo.png",
+        "description": "Le marché gabonais, à portée de clic : annonces, produits et services au FCFA, de Libreville à Port-Gentil."
+      }
+    </script>
+    <style id="gm-splash-css">
+      #gm-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 20px;
+        background: radial-gradient(circle at 50% 42%, #142c66 0%, #0a1633 56%, #060e22 100%);
+        color: #ffffff;
+        font-family: 'Manrope', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        overflow: hidden;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        transition: opacity 0.32s cubic-bezier(0.22, 1, 0.36, 1), transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), visibility 0.32s;
+      }
+      #gm-splash.gm-splash--out {
+        opacity: 0;
+        transform: scale(1.035);
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .gm-sp-stage {
+        position: relative;
+        width: 120px;
+        height: 120px;
+        display: grid;
+        place-items: center;
+        animation: gmSpPop 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .gm-sp-halo {
+        position: absolute;
+        inset: -14px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(245, 184, 46, 0.28) 0%, rgba(245, 184, 46, 0) 70%);
+        animation: gmSpPulse 1.8s ease-in-out infinite;
+      }
+      .gm-sp-track {
+        position: absolute;
+        inset: 4px;
+        border-radius: 50%;
+        border: 1.5px solid rgba(245, 184, 46, 0.22);
+      }
+      .gm-sp-orbit {
+        position: absolute;
+        inset: 2px;
+        border-radius: 50%;
+        background: conic-gradient(from 0deg, transparent 0deg, rgba(245, 184, 46, 0.08) 190deg, #f5b82e 315deg, #fff4cc 354deg, transparent 360deg);
+        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+        mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+        animation: gmSpSpin 1.15s linear infinite;
+      }
+      .gm-sp-medallion {
+        position: relative;
+        width: 86px;
+        height: 86px;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 12px 32px rgba(3, 8, 22, 0.55), 0 0 0 2px rgba(245, 184, 46, 0.42);
+        overflow: hidden;
+        display: grid;
+        place-items: center;
+      }
+      .gm-sp-medallion img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .gm-sp-wordmark {
+        margin-top: 22px;
+        text-align: center;
+        animation: gmSpRise 0.5s 0.08s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .gm-sp-title {
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        line-height: 1.15;
+        color: #ffffff;
+        margin: 0;
+      }
+      .gm-sp-subbrand {
+        display: block;
+        margin-top: 4px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        color: #f5b82e;
+        text-transform: uppercase;
+      }
+      .gm-sp-tagline {
+        margin: 12px 0 0;
+        font-size: 13px;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.78);
+        text-align: center;
+        max-width: 280px;
+        line-height: 1.4;
+        animation: gmSpRise 0.52s 0.14s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .gm-sp-bar {
+        margin-top: 22px;
+        width: 144px;
+        height: 3px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        overflow: hidden;
+        animation: gmSpRise 0.52s 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .gm-sp-fill {
+        height: 100%;
+        width: 38%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #c8870a 0%, #f5b82e 55%, #fff2c2 100%);
+        animation: gmSpLoad 1.1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        transition: width 0.2s ease;
+      }
+      #gm-splash.gm-splash--out .gm-sp-fill {
+        width: 100% !important;
+      }
+      .gm-sp-mote {
+        position: absolute;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(255, 232, 158, 0.85) 0%, rgba(245, 184, 46, 0) 72%);
+        pointer-events: none;
+        animation: gmSpFloat 2.8s ease-in-out infinite;
+      }
+      .gm-sp-mote--1 { width: 7px; height: 7px; left: 22%; top: 34%; animation-delay: 0s; }
+      .gm-sp-mote--2 { width: 5px; height: 5px; right: 23%; top: 38%; animation-delay: 0.5s; }
+      .gm-sp-mote--3 { width: 6px; height: 6px; left: 28%; bottom: 32%; animation-delay: 0.9s; }
+      .gm-sp-mote--4 { width: 5px; height: 5px; right: 26%; bottom: 35%; animation-delay: 1.3s; }
+      @keyframes gmSpSpin { to { transform: rotate(360deg); } }
+      @keyframes gmSpPulse { 0%, 100% { transform: scale(0.95); opacity: 0.72; } 50% { transform: scale(1.08); opacity: 1; } }
+      @keyframes gmSpPop { from { opacity: 0; transform: scale(0.86); } to { opacity: 1; transform: scale(1); } }
+      @keyframes gmSpRise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes gmSpLoad { 0% { width: 14%; } 65% { width: 78%; } 100% { width: 92%; } }
+      @keyframes gmSpFloat { 0%, 100% { transform: translateY(0) scale(0.9); opacity: 0.35; } 50% { transform: translateY(-10px) scale(1.2); opacity: 0.85; } }
+      @media (prefers-reduced-motion: reduce) {
+        .gm-sp-orbit, .gm-sp-halo, .gm-sp-mote { animation: none !important; }
+      }
+    </style>
+    <script src="/init.js"></script>
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&display=swap"
+        rel="stylesheet"
+      />
+      <style>#gm-splash { display: none !important; }</style>
+    </noscript>
+  </head>
+  <body>
+    <div id="gm-splash" role="status" aria-live="polite" aria-label="Ouverture de GODSON Marketplace">
+      <span class="gm-sp-mote gm-sp-mote--1" aria-hidden="true"></span>
+      <span class="gm-sp-mote gm-sp-mote--2" aria-hidden="true"></span>
+      <span class="gm-sp-mote gm-sp-mote--3" aria-hidden="true"></span>
+      <span class="gm-sp-mote gm-sp-mote--4" aria-hidden="true"></span>
+      <div class="gm-sp-stage">
+        <div class="gm-sp-halo" aria-hidden="true"></div>
+        <div class="gm-sp-track" aria-hidden="true"></div>
+        <div class="gm-sp-orbit" aria-hidden="true"></div>
+        <div class="gm-sp-medallion">
+          <img src="data:image/webp;base64,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" alt="GODSON Marketplace" width="86" height="86" decoding="sync" />
+        </div>
+      </div>
+      <div class="gm-sp-wordmark">
+        <p class="gm-sp-title">GODSON<span class="gm-sp-subbrand">Marketplace</span></p>
+      </div>
+      <p class="gm-sp-tagline">Le marché gabonais, à portée de clic</p>
+      <div class="gm-sp-bar" aria-hidden="true">
+        <div class="gm-sp-fill"></div>
+      </div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
