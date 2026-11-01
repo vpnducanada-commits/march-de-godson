@@ -9,6 +9,7 @@ import {
   fetchListingBySlug,
   publishListing,
   updateListing,
+  ListingModerationError,
 } from '../lib/api';
 import {
   processImage,
@@ -18,6 +19,8 @@ import {
   MAX_IMAGES,
 } from '../lib/images';
 import { isValidPhoneInput } from '../lib/phone';
+import { verifyMagicBytes } from '../lib/security';
+import { requestUserPosition } from '../lib/geolocation';
 import type { Category, Locality } from '../lib/types';
 
 interface ImageDraft {
@@ -27,14 +30,16 @@ interface ImageDraft {
 
 interface ExistingImage {
   url: string;
+  storagePath: string | null;
 }
 
 interface Props {
   mode: 'create' | 'edit';
   slug?: string;
+  onSuccess?: ()=>void;
 }
 
-export default function ListingForm({ mode, slug }: Props) {
+export default function ListingForm({ mode, slug, onSuccess }: Props) {
   const { session, profile } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -54,10 +59,22 @@ export default function ListingForm({ mode, slug }: Props) {
   const [phone, setPhone] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [agree, setAgree] = useState(false);
+  const [meetLat, setMeetLat] = useState<number|null>(null);
+  const [meetLng, setMeetLng] = useState<number|null>(null);
+  const [meetLabel, setMeetLabel] = useState("");
+  const [locating, setLocating] = useState(false);
   const [images, setImages] = useState<ImageDraft[]>([]);
   const [existingImages, setExistingImages] = useState<ExistingImage[]>([]);
+  const [removedImagePaths, setRemovedImagePaths] = useState<string[]>([]);
+  const [videoFile, setVideoFile] = useState<File|null>(null);
+  const [videoPreview, setVideoPreview] = useState<string|null>(null);
+  const [videoDuration, setVideoDuration] = useState<number>(0);
+  const [existingVideo, setExistingVideo] = useState<string|null>(null);
+  const videoRef = useRef<HTMLInputElement>(null);
+  const videoElRef = useRef<HTMLVideoElement>(null);
   const [prefilled, setPrefilled] = useState(mode === 'create');
   const [submitting, setSubmitting] = useState(false);
+  const [publishStep, setPublishStep] = useState(0);
   const [formError, setFormError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -105,7 +122,19 @@ export default function ListingForm({ mode, slug }: Props) {
       setCondition(l.condition || '');
       setPhone(l.contact_phone || '');
       setWhatsapp(l.contact_whatsapp || '');
-      setExistingImages(item.images.map((url) => ({ url })));
+      setMeetLat(l.latitude ?? null);
+      setMeetLng(l.longitude ?? null);
+      setMeetLabel(l.location_label || '');
+      const paths = item.imagePaths || [];
+      const realExisting: ExistingImage[] = [];
+      item.images.forEach((url, idx) => {
+        const sp = paths[idx] ?? null;
+        if (sp || (l.is_demo && url !== '/demo/placeholder.svg')) {
+          realExisting.push({ url, storagePath: sp });
+        }
+      });
+      setExistingImages(realExisting);
+      if (l.video_url || item.videoUrl) setExistingVideo(l.video_url || item.videoUrl || null);
       setAgree(true);
     });
   }, [mode, slug, prefilled, categories, localities, navigate, toast]);
@@ -141,6 +170,53 @@ export default function ListingForm({ mode, slug }: Props) {
       }
     }
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const handleVideoFiles = async (files: FileList | null) => {
+    if (!files || !files[0]) return;
+    const file = files[0];
+    if (!['video/mp4', 'video/webm', 'video/quicktime'].includes(file.type)) {
+      toast('error', 'Format vidéo non supporté. Utilisez MP4, WebM ou MOV.');
+      return;
+    }
+    if (file.size > 80 * 1024 * 1024) {
+      toast('error', 'Vidéo trop lourde (max 80 Mo).');
+      return;
+    }
+    if (!(await verifyMagicBytes(file, 'video'))) {
+      toast('error', 'Fichier vidéo invalide ou corrompu.');
+      return;
+    }
+    // Durée ≤180s via metadata
+    const url = URL.createObjectURL(file);
+    const v = document.createElement('video');
+    v.preload='metadata'; v.src=url;
+    await new Promise<void>((res)=>{ v.onloadedmetadata=()=>res(); v.onerror=()=>res(); });
+    const dur = v.duration || 0;
+    URL.revokeObjectURL(url);
+    if (dur > 180) { toast('error', `Vidéo trop longue (${Math.round(dur)}s) — maximum 3:00.`); return; }
+    // OK
+    if (videoPreview) URL.revokeObjectURL(videoPreview);
+    const preview = URL.createObjectURL(file);
+    setVideoFile(file); setVideoPreview(preview); setVideoDuration(dur);
+    if (videoRef.current) videoRef.current.value='';
+  };
+  const removeVideo = () => {
+    if (videoPreview) URL.revokeObjectURL(videoPreview);
+    setVideoFile(null); setVideoPreview(null); setVideoDuration(0);
+    if (existingVideo) setExistingVideo(null);
+  };
+
+  const removeExistingImage = (i: number) => {
+    setExistingImages((prev) => {
+      const target = prev[i];
+      if (target?.storagePath) {
+        setRemovedImagePaths((paths) =>
+          paths.includes(target.storagePath!) ? paths : [...paths, target.storagePath!],
+        );
+      }
+      return prev.filter((_, idx) => idx !== i);
+    });
   };
 
   const removeImage = (i: number) => {
@@ -183,6 +259,7 @@ export default function ListingForm({ mode, slug }: Props) {
     }
     setFormError(null);
     setSubmitting(true);
+    setPublishStep(1);
     try {
       const payload = {
         title,
@@ -198,25 +275,46 @@ export default function ListingForm({ mode, slug }: Props) {
         contact_whatsapp: whatsapp.trim() || phone.trim() || null,
       };
       if (mode === 'create') {
+        setPublishStep(2);
         const newSlug = await publishListing(session.user.id, {
           ...payload,
           imageFiles: images.map((i) => i.blob),
+          latitude: meetLat,
+          longitude: meetLng,
+          location_label: meetLabel || null,
+          videoFile: videoFile || null,
         });
+        setPublishStep(3);
         toast('success', 'Annonce publiée avec succès !');
+        onSuccess?.();
         navigate(`/annonce/${newSlug}`);
       } else if (slug) {
+        setPublishStep(2);
         await updateListing(session.user.id, slug, {
           ...payload,
+          latitude: meetLat,
+          longitude: meetLng,
+          location_label: meetLabel.trim() || null,
           newImages: images.map((i) => i.blob),
-          removeImagePaths: [],
+          removeImagePaths: removedImagePaths,
+          ...(videoFile ? { videoFile } : {}),
+          ...(!videoFile && !videoPreview && existingVideo === null ? { removeVideo: true } : {}),
         });
+        setPublishStep(3);
         toast('success', 'Annonce mise à jour.');
+        onSuccess?.();
         navigate(`/annonce/${slug}`);
       }
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : 'La sauvegarde a échoué.');
+      if (error instanceof ListingModerationError) {
+        toast('error', error.message);
+        navigate(`/modifier/${error.slug}`);
+      } else {
+        setFormError(error instanceof Error ? error.message : 'La sauvegarde a échoué.');
+      }
     } finally {
       setSubmitting(false);
+      setPublishStep(0);
     }
   };
 
@@ -232,6 +330,11 @@ export default function ListingForm({ mode, slug }: Props) {
         </div>
       )}
 
+      <div className="alert alert--info" role="note">
+        <Icon name="shield" size={17} />
+        <span>Avant sa mise en ligne, le texte, les photos et la vidéo de votre annonce sont contrôlés automatiquement par Gemini. Les messages privés ne sont pas analysés.</span>
+      </div>
+
       {/* Photos */}
       <section className="form-section">
         <h2 className="form-section__title">
@@ -244,13 +347,16 @@ export default function ListingForm({ mode, slug }: Props) {
         </p>
         <div className="image-grid">
           {existingImages.map((img, i) => (
-            <div key={i} className="image-tile">
+            <div key={img.storagePath || img.url} className="image-tile">
               <img src={img.url} alt={`Photo ${i + 1}`} />
-              {mode === 'create' && (
-                <button type="button" className="image-tile__remove" aria-label="Retirer cette photo">
-                  <Icon name="x" size={13} />
-                </button>
-              )}
+              <button
+                type="button"
+                className="image-tile__remove"
+                onClick={() => removeExistingImage(i)}
+                aria-label="Retirer cette photo"
+              >
+                <Icon name="x" size={13} />
+              </button>
             </div>
           ))}
           {images.map((img, i) => (
@@ -277,6 +383,33 @@ export default function ListingForm({ mode, slug }: Props) {
           onChange={(e) => addFiles(e.target.files)}
           aria-label="Choisir des images"
         />
+      </section>
+
+
+      {/* Vidéo */}
+      <section className="form-section">
+        <h2 className="form-section__title">
+          <Icon name="video" size={18} /> Vidéo du produit <span style={{fontWeight:400, fontSize:12, color:'var(--text-2)'}}>(optionnel, max 3:00)</span>
+        </h2>
+        <p className="form-hint">Ajoutez une courte vidéo (MP4/WebM, 80 Mo max, 3 min max) pour montrer le produit en action. Elle s'affichera sur votre annonce.</p>
+        {existingVideo && !videoPreview ? (
+          <div className="video-preview" style={{position:'relative', borderRadius:12, overflow:'hidden', background:'#000', maxWidth:480}}>
+            <video src={existingVideo} controls playsInline style={{width:'100%', display:'block'}} />
+            <button type="button" className="image-tile__remove" onClick={removeVideo} aria-label="Retirer la vidéo" style={{position:'absolute', top:8, right:8}}><Icon name="x" size={13} /></button>
+          </div>
+        ) : videoPreview ? (
+          <div className="video-preview" style={{position:'relative', borderRadius:12, overflow:'hidden', background:'#000', maxWidth:480}}>
+            <video ref={videoElRef} src={videoPreview} controls playsInline style={{width:'100%', display:'block'}} onLoadedMetadata={(e)=>setVideoDuration((e.target as HTMLVideoElement).duration)} />
+            <button type="button" className="image-tile__remove" onClick={removeVideo} aria-label="Retirer la vidéo" style={{position:'absolute', top:8, right:8}}><Icon name="x" size={13} /></button>
+            <span style={{position:'absolute', bottom:8, left:8, background:'rgba(0,0,0,0.65)', color:'#fff', fontSize:12, padding:'3px 8px', borderRadius:999}}>{Math.floor(videoDuration/60)}:{String(Math.floor(videoDuration%60)).padStart(2,'0')} / 3:00</span>
+          </div>
+        ) : (
+          <button type="button" className="image-add" onClick={()=>videoRef.current?.click()} style={{minHeight:80, width:'100%', maxWidth:480, borderStyle:'dashed', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:6}}>
+            <Icon name="video" size={22} />
+            <span>Ajouter une vidéo (max 3:00)</span>
+          </button>
+        )}
+        <input ref={videoRef} type="file" accept="video/mp4,video/webm,video/quicktime" hidden onChange={(e)=>handleVideoFiles(e.target.files)} aria-label="Choisir une vidéo" />
       </section>
 
       {/* Informations */}
@@ -413,6 +546,40 @@ export default function ListingForm({ mode, slug }: Props) {
         </div>
       </section>
 
+      
+      {/* Point de rencontre */}
+      <section className="form-section">
+        <h2 className="form-section__title">
+          <Icon name="map-pin" size={18} /> Point de rencontre <span style={{fontWeight:400, fontSize:12, color:'var(--text-2)'}}>(optionnel)</span>
+        </h2>
+        <p className="form-hint">Partagez un point approximatif (quartier, marché, carrefour). Au clic, votre appareil vous invitera à autoriser l’accès à votre position.</p>
+        <div style={{display:'flex', gap:8, flexWrap:'wrap', marginBottom:10}}>
+          <button type="button" className="btn btn--ghost" onClick={async()=>{
+            setLocating(true);
+            try {
+              const coords = await requestUserPosition();
+              setMeetLat(coords.latitude);
+              setMeetLng(coords.longitude);
+              if (!meetLabel.trim()) {
+                setMeetLabel(`${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}`);
+              }
+              toast('success', 'Position GPS activée et ajoutée à l’annonce.');
+            } catch (err) {
+              toast('error', err instanceof Error ? err.message : 'Position refusée ou indisponible.');
+            } finally {
+              setLocating(false);
+            }
+          }} disabled={locating}>
+            <Icon name="map-pin" size={16} /> {locating ? 'Demande d’autorisation…' : 'Utiliser ma position'}
+          </button>
+          {(meetLat!==null || meetLabel) && <button type="button" className="btn btn--ghost" onClick={()=>{setMeetLat(null); setMeetLng(null); setMeetLabel('');}}><Icon name="x" size={14}/> Retirer</button>}
+        </div>
+        <div className="form-group">
+          <label htmlFor="lf-meetlabel">Libelle du lieu (Marche, Carrefour...)</label>
+          <input id="lf-meetlabel" type="text" maxLength={80} value={meetLabel} onChange={(e)=>setMeetLabel(e.target.value)} placeholder="Ex: Marche Mont-Bouet" />
+        </div>
+      </section>
+
       {/* Caractéristiques */}
       {!isService && (
         <section className="form-section">
@@ -439,7 +606,7 @@ export default function ListingForm({ mode, slug }: Props) {
         </h2>
         <p className="form-hint">
           Au moins un moyen de contact est requis : c'est ainsi que les acheteurs vous
-          joindront. Formats acceptés : 06 01 23 45 67 ou +241 06 01 23 45 67.
+          joindront. Formats gabonais acceptés : 066 12 34 56 ou +241 66 12 34 56.
         </p>
         <div className="form-row">
           <div className="form-group">
@@ -449,7 +616,7 @@ export default function ListingForm({ mode, slug }: Props) {
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="06 01 23 45 67"
+              placeholder="066 12 34 56"
               autoComplete="tel"
             />
           </div>
@@ -475,6 +642,7 @@ export default function ListingForm({ mode, slug }: Props) {
         </span>
       </label>
 
+      {submitting && <div className="publish-progress" role="progressbar" aria-valuenow={publishStep*33} aria-valuemin={0} aria-valuemax={100}><div className="publish-progress__bar" style={{width: `${publishStep*33}%`}} /><span className="publish-progress__label">{publishStep===1?"Préparation…":publishStep===2?"Envoi des images…":"Finalisation…"}</span></div>}
       <div className="form-actions">
         <button type="button" className="btn btn--ghost" onClick={() => navigate(-1)} disabled={submitting}>
           Annuler

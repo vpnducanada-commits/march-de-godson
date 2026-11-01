@@ -18,6 +18,8 @@ export interface Locality {
 
 export interface Profile {
   id: string;
+  username?: string | null;
+  username_updated_at?: string | null;
   display_name: string | null;
   pseudonym: string | null;
   avatar_url: string | null;
@@ -25,9 +27,45 @@ export interface Profile {
   account_type: 'particulier' | 'commercant' | 'professionnel' | 'entreprise';
   role: 'user' | 'admin';
   is_banned: boolean;
+  moderation_suspended_until?: string | null;
   is_demo: boolean;
   created_at: string;
   updated_at: string;
+  shop_lat?: number | null;
+  shop_lng?: number | null;
+  shop_label?: string | null;
+}
+
+/** Aperçu court et lisible de l'identifiant d'un membre (8 premiers caractères hors tirets). */
+export function shortUserId(id: string): string {
+  return id.replace(/-/g, '').slice(0, 8).toLowerCase();
+}
+
+export interface SearchedUser {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  pseudonym: string | null;
+  avatar_url: string | null;
+  city: string | null;
+  account_type: 'particulier' | 'commercant' | 'professionnel' | 'entreprise';
+  is_demo: boolean;
+  created_at: string;
+  followers_count: number;
+  listings_count: number;
+}
+
+export interface UserNotification {
+  id: string;
+  user_id: string;
+  actor_id: string | null;
+  listing_id: string | null;
+  kind: string;
+  title: string;
+  body: string;
+  link: string;
+  read_at: string | null;
+  created_at: string;
 }
 
 export type ListingStatus = 'draft' | 'pending' | 'active' | 'refused' | 'archived';
@@ -70,6 +108,9 @@ export interface Listing {
   negotiable: boolean;
   currency: string;
   city_id: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  location_label?: string | null;
   area: string | null;
   condition: ListingCondition | null;
   seller_type: string;
@@ -82,6 +123,8 @@ export interface Listing {
   updated_at: string;
   /** Échéance de l'annonce (null/absente en mode démo : pas d'expiration). */
   expires_at?: string | null;
+  video_url?: string | null;
+  video_path?: string | null;
 }
 
 /** Une annonce active est-elle expirée (masquée du public, reprenable par son vendeur) ? */
@@ -108,6 +151,9 @@ export interface ListingFull {
   subcategory: Category | null;
   city: Locality | null;
   images: string[];
+  imagePaths?: (string | null)[];
+  videoUrl?: string | null;
+  distanceKm?: number | null;
   seller: Profile | null;
 }
 
@@ -142,6 +188,8 @@ export interface ListingQuery {
   minPrice?: number;
   maxPrice?: number;
   condition?: ListingCondition;
+  lat?: number;
+  lng?: number;
   sort?: 'newest' | 'price_asc' | 'price_desc';
   page?: number;
   pageSize?: number;
@@ -168,6 +216,15 @@ export const STATUS_LABELS: Record<ListingStatus, string> = {
   refused: 'Refusée',
   archived: 'Archivée',
 };
+
+export interface Review {
+  id: string;
+  seller_id: string;
+  author_id: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+}
 
 export const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   particulier: 'Particulier',

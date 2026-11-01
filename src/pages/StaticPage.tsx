@@ -324,7 +324,15 @@ export const StaticContent: Record<'faq' | 'about' | 'security' | 'terms' | 'pri
         ),
       },
       {
-        heading: '3. Données publiques',
+        heading: '3. Modération automatique des annonces',
+        body: (
+          <p>
+            Avant publication, le texte, les photos et les vidéos des annonces peuvent être transmis à Google Gemini afin de détecter les contenus grossiers ou abusifs et de vérifier que les médias correspondent au bien ou à l’activité annoncée. Les messages privés ne sont pas analysés par ce contrôle. Une annonce peut être bloquée ou un compte sanctionné en cas d’infraction confirmée par le système.
+          </p>
+        ),
+      },
+      {
+        heading: '4. Données publiques',
         body: (
           <p>
             Sont publiques : le nom affiché, le pseudonyme, la ville, le type de compte, le
@@ -334,7 +342,7 @@ export const StaticContent: Record<'faq' | 'about' | 'security' | 'terms' | 'pri
         ),
       },
       {
-        heading: '4. Sécurité',
+        heading: '5. Sécurité',
         body: (
           <p>
             Les mots de passe sont chiffrés ; les accès aux données sont restreints par des
@@ -345,7 +353,7 @@ export const StaticContent: Record<'faq' | 'about' | 'security' | 'terms' | 'pri
         ),
       },
       {
-        heading: '5. Vos droits',
+        heading: '6. Vos droits',
         body: (
           <p>
             Vous pouvez accéder, rectifier ou supprimer vos données, et supprimer votre
@@ -356,7 +364,7 @@ export const StaticContent: Record<'faq' | 'about' | 'security' | 'terms' | 'pri
         ),
       },
       {
-        heading: '6. Cookies et stockage local',
+        heading: '7. Cookies et stockage local',
         body: (
           <p>
             Le site utilise le stockage local du navigateur pour : maintenir votre session,
@@ -369,7 +377,16 @@ export const StaticContent: Record<'faq' | 'about' | 'security' | 'terms' | 'pri
   },
 };
 
-export default function StaticPage({ content }: { content: StaticContent }) {
+export type StaticPageKey = 'faq' | 'about' | 'security' | 'terms' | 'privacy';
+
+export default function StaticPage({
+  page,
+  content: explicitContent,
+}: {
+  page?: StaticPageKey;
+  content?: StaticContent;
+}) {
+  const content = explicitContent ?? StaticContent[page || 'about'];
   usePageMeta(content.title, content.description);
   return (
     <div className="container page-narrow static-page">

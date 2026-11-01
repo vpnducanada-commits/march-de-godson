@@ -89,13 +89,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile]);
 
   const signOut = useCallback(async () => {
+    const uid = session?.user?.id;
+    try {
+      if (uid) {
+        window.localStorage.removeItem(`gm:notif:${uid}`);
+        window.localStorage.removeItem(`gm_notif_state_${uid}`);
+      }
+      window.localStorage.removeItem('gm_near');
+      window.localStorage.removeItem('gm_favorites');
+      window.localStorage.removeItem('gm_recently_viewed');
+    } catch {
+      // Stockage local indisponible
+    }
     if (!supabase) return;
+    try {
+      await supabase.removeAllChannels();
+    } catch {
+      // Canaux déjà fermés
+    }
     await supabase.auth.signOut();
     loadSeq.current++;
     setSession(null);
     setProfile(null);
     setProfileLoading(false);
-  }, []);
+  }, [session?.user?.id]);
 
   const refreshProfile = useCallback(async () => {
     if (!session?.user) return;
@@ -107,7 +124,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profile,
     // Chargé = session restaurée ET profil courant résolu (ou session nulle).
     loading: booting || (session != null && profileLoading),
-    isBanned: profile?.is_banned ?? false,
+    isBanned: Boolean(
+      profile?.is_banned ||
+      (profile?.moderation_suspended_until && new Date(profile.moderation_suspended_until).getTime() > Date.now()),
+    ),
     isAdmin: profile?.role === 'admin',
     signOut,
     refreshProfile,

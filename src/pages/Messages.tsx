@@ -68,7 +68,10 @@ export default function Messages() {
         if (m.some((x) => x.sender_id !== userId)) void markConversationRead(id);
         loadConvs();
         unsub = subscribeToConversation(id, (nm) => {
-          setMsgs((prev) => (prev ? [...prev, nm] : [nm]));
+          setMsgs((prev) => {
+            if (!prev) return [nm];
+            return prev.some((x) => x.id === nm.id) ? prev : [...prev, nm];
+          });
           if (nm.sender_id !== userId) void markConversationRead(id);
           loadConvs();
         });
@@ -107,7 +110,10 @@ export default function Messages() {
     setSending(true);
     try {
       const m = await sendMessage(userId, id, draft);
-      setMsgs((prev) => (prev ? [...prev, m] : [m]));
+      setMsgs((prev) => {
+        if (!prev) return [m];
+        return prev.some((x) => x.id === m.id) ? prev : [...prev, m];
+      });
       setDraft('');
       loadConvs();
     } catch (e) {

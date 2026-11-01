@@ -8,6 +8,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: [
+        'init.js',
         'favicon.png',
         'favicon.svg',
         'logo.png',
@@ -26,6 +27,7 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         display: 'standalone',
+        display_override: ['standalone', 'minimal-ui'],
         orientation: 'portrait-primary',
         background_color: '#0A1633',
         theme_color: '#0A1633',
@@ -42,9 +44,28 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        navigateFallbackDenylist: [/^\/admin/],
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        // Ne pas précacher index.html en CacheFirst : sinon un ancien Service Worker
+        // sert l'ancien bundle JS et provoque un faux 404 sur toute nouvelle route déployée.
+        globPatterns: ['**/*.{js,css,svg,png,woff2}'],
+        navigateFallback: null,
         runtimeCaching: [
+          {
+            // Navigation HTML : toujours privilégier le réseau (3s max) puis fallback hors-ligne
+            urlPattern: ({ request, url }) =>
+              request.mode === 'navigate' &&
+              !url.pathname.startsWith('/apk/') &&
+              !/\.(?:apk|zip|pdf|xml|txt)$/i.test(url.pathname),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html-navigation-cache',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
           {
             urlPattern: /\/demo\//,
             handler: 'CacheFirst',
@@ -54,17 +75,28 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+          {
+            // Supabase Storage : uniquement les buckets d'images (jamais listing-videos / flux HTTP Range MP4)
+            urlPattern:
+              /^https:\/\/[^/]+\.supabase\.co\/storage\/v1\/object\/public\/(?:listing-images|avatars)\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'supabase-images',
+              expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
         ],
       },
     }),
   ],
   build: {
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        // Découpe : le client Supabase (~300 kB) dans son propre chunk
-        // pour garder le bundle principal léger (et sous le seuil d'avertissement).
         manualChunks: {
           supabase: ['@supabase/supabase-js'],
+          vendor: ['react','react-dom','react-router-dom'],
         },
       },
     },

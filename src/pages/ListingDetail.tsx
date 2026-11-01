@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Icon } from '../components/Icon';
+import { FollowButton } from '../components/FollowButton';
+import { GalleryLightbox } from '../components/GalleryLightbox';
 import { Modal } from '../components/ui/Modal';
 import { Spinner } from '../components/ui/Spinner';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -24,6 +26,8 @@ import type { ListingFull, Category } from '../lib/types';
 import { ACCOUNT_TYPE_LABELS, CONDITION_LABELS, isListingExpired } from '../lib/types';
 import { formatFCFA, timeAgo } from '../lib/format';
 import { telLink, whatsappLink } from '../lib/phone';
+import { safeMediaUrl } from '../lib/security';
+import { recordViewedSlug } from '../lib/recentlyViewed';
 import { usePageMeta } from '../hooks/usePageMeta';
 import { useJsonLd } from '../hooks/useJsonLd';
 
@@ -56,6 +60,8 @@ export default function ListingDetail() {
   const [copied, setCopied] = useState(false);
   const [msgBusy, setMsgBusy] = useState(false);
   const [sellerVerified, setSellerVerified] = useState(false);
+  const [quickIdx, setQuickIdx] = useState<number>(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const loadListing = useCallback(() => {
     if (!slug) return;
@@ -80,6 +86,7 @@ export default function ListingDetail() {
           return;
         }
         setItem(r);
+        recordViewedSlug(r.listing.slug);
         if (!expired) {
           fetchSellerListings(r.listing.seller_id, { pageSize: 4, status: 'active' })
             .then((res) => setSellerItems(res.items.filter((i) => i.listing.slug !== r.listing.slug)))
@@ -205,7 +212,7 @@ export default function ListingDetail() {
     if (!item) return;
     if (!session) {
       toast('info', 'Connectez-vous pour sauvegarder cette annonce dans vos favoris.');
-      window.location.href = '/connexion';
+      navigate('/connexion', { state: { from: `/annonce/${item.listing.slug}` } });
       return;
     }
     setFavBusy(true);
@@ -218,7 +225,7 @@ export default function ListingDetail() {
     } finally {
       setFavBusy(false);
     }
-  }, [item, session, toast]);
+  }, [item, session, toast, navigate]);
 
   const onShare = async () => {
     const url = window.location.href;
@@ -242,12 +249,12 @@ export default function ListingDetail() {
   };
 
   const onReport = async () => {
+    if (!item) return;
     if (!session) {
       toast('info', 'Connectez-vous pour envoyer un signalement.');
-      window.location.href = '/connexion';
+      navigate('/connexion', { state: { from: `/annonce/${item.listing.slug}` } });
       return;
     }
-    if (!item) return;
     setReportBusy(true);
     try {
       const reportId = await reportListing(session.user.id, item.listing.id, reportReason, reportDetails);
@@ -336,7 +343,22 @@ export default function ListingDetail() {
   }
 
   const price = formatFCFA(listing.price);
-  const wa = whatsappLink(listing.contact_whatsapp, `Bonjour, je suis intéressé par votre annonce « ${listing.title} » sur GODSON Marketplace.`);
+  const quickQuestions = [
+    {
+      short: 'Toujours disponible ?',
+      full: `Bonjour, votre annonce « ${listing.title} » est-elle toujours disponible sur GODSON Marketplace ?`,
+    },
+    {
+      short: 'Prix négociable ?',
+      full: `Bonjour, le prix affiché pour « ${listing.title} » est-il négociable ?`,
+    },
+    {
+      short: 'Lieu de rencontre ?',
+      full: `Bonjour, à quel endroit public peut-on se retrouver pour vérifier « ${listing.title} » ?`,
+    },
+  ];
+  const selectedQuestion = quickQuestions[quickIdx]?.full || quickQuestions[0].full;
+  const wa = whatsappLink(listing.contact_whatsapp, selectedQuestion);
   const tel = telLink(listing.contact_phone || listing.contact_whatsapp);
   // Fil d'Ariane : si l'annonce est dans une sous-catégorie, le maillon
   // « catégorie » pointe vers la catégorie parente (pas de nom dupliqué).
@@ -370,10 +392,29 @@ export default function ListingDetail() {
       <div className="detail__layout">
         {/* GALERIE */}
         <div className="detail__gallery">
-          <div className="detail__main-img">
+          <div
+            className="detail__main-img"
+            role="button"
+            tabIndex={0}
+            aria-label="Agrandir la photo"
+            style={{ cursor: 'zoom-in' }}
+            onClick={() => setLightboxOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setLightboxOpen(true);
+              }
+            }}
+          >
             <img src={item.images[activeImg] || item.images[0]} alt={`${listing.title} — photo ${activeImg + 1}`} />
             {listing.is_demo && <span className="card__badge card__badge--demo">Annonce de démonstration</span>}
           </div>
+          {item.videoUrl && (
+            <div className="detail__video" style={{marginTop:12, borderRadius:12, overflow:'hidden', background:'#000'}}>
+              <video src={item.videoUrl} controls playsInline preload="metadata" style={{width:'100%', display:'block', maxHeight:420}} />
+              <div style={{padding:'6px 10px', background:'#0a1633', color:'#fff', fontSize:12, display:'flex', alignItems:'center', gap:6}}><span style={{width:8,height:8,borderRadius:'50%',background:'#ef4444',display:'inline-block'}}/> Vidéo produit — {item.listing.title.slice(0,30)}</div>
+            </div>
+          )}
           {item.images.length > 1 && (
             <div className="detail__thumbs">
               {item.images.map((src, i) => (
@@ -425,13 +466,36 @@ export default function ListingDetail() {
           </div>
 
           {/* CONTACT */}
-          <div className="detail__contact">
+          <div className={`detail__contact${wa || tel ? ' detail--has-bar' : ''}`}>
             <h2 className="detail__h">Contacter le vendeur</h2>
+            {(wa || (session && !demoMode)) && (
+              <div className="quick-msgs" role="group" aria-label="Questions rapides à envoyer">
+                {quickQuestions.map((qq, idx) => (
+                  <button
+                    key={qq.short}
+                    type="button"
+                    className={`quick-msg-chip${quickIdx === idx ? ' quick-msg-chip--active' : ''}`}
+                    onClick={() => {
+                      setQuickIdx(idx);
+                      void navigator.clipboard?.writeText(qq.full).catch(() => undefined);
+                      toast('info', `Question prête : « ${qq.short} »`);
+                    }}
+                  >
+                    {qq.short}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="detail__contact-btns">
-              {session && !demoMode && (
+              {session && !demoMode && !isOwner && (
                 <button type="button" className="btn btn--primary" onClick={() => void onMessageSeller()} disabled={msgBusy}>
                   <Icon name="send" size={17} /> {msgBusy ? 'Ouverture…' : 'Message le vendeur'}
                 </button>
+              )}
+              {isOwner && (
+                <Link to={`/modifier/${listing.slug}`} className="btn btn--ghost">
+                  <Icon name="pencil" size={16} /> Modifier mon annonce
+                </Link>
               )}
               {wa && (
                 <a className="btn btn--whatsapp" href={wa} target="_blank" rel="noopener noreferrer">
@@ -479,6 +543,29 @@ export default function ListingDetail() {
             </div>
           </div>
 
+
+      {/* LOCALISATION / RETROUVAILLE */}
+      {(listing.latitude != null && listing.longitude != null) || listing.location_label ? (
+        <div className="detail__location" style={{border:'1px solid var(--border)', borderRadius:12, padding:14, background:'var(--surface)', marginBottom:16}}>
+          <h2 className="detail__h"><span style={{display:'inline-flex',alignItems:'center',gap:6}}><span style={{width:8,height:8,borderRadius:'50%',background:'var(--blue)'}}/> Point de rencontre</span></h2>
+          {listing.location_label && <p style={{margin:'6px 0 8px', fontSize:14}}>{listing.location_label}</p>}
+          {listing.latitude != null && listing.longitude != null && (
+            <>
+              <iframe title="Carte OpenStreetMap" width="100%" height="220" loading="lazy" sandbox="allow-scripts allow-same-origin" referrerPolicy="no-referrer" style={{border:0, borderRadius:8}} src={`https://www.openstreetmap.org/export/embed.html?bbox=${listing.longitude-0.008}%2C${listing.latitude-0.008}%2C${listing.longitude+0.008}%2C${listing.latitude+0.008}&layer=mapnik&marker=${listing.latitude}%2C${listing.longitude}`} />
+              <div style={{display:'flex', gap:8, marginTop:10, flexWrap:'wrap'}}>
+                <a className="btn btn--ghost" href={`https://www.openstreetmap.org/?mlat=${listing.latitude}&mlon=${listing.longitude}#map=16/${listing.latitude}/${listing.longitude}`} target="_blank" rel="noopener noreferrer">Ouvrir OSM</a>
+                <a className="btn btn--primary" href={`https://www.google.com/maps/dir/?api=1&destination=${listing.latitude},${listing.longitude}`} target="_blank" rel="noopener noreferrer">Itinéraire Google Maps</a>
+                <button type="button" className="btn btn--ghost" onClick={()=>{
+                  const text = listing.location_label ? `${listing.location_label} — https://www.openstreetmap.org/?mlat=${listing.latitude}&mlon=${listing.longitude}` : `https://www.openstreetmap.org/?mlat=${listing.latitude}&mlon=${listing.longitude}`;
+                  navigator.clipboard.writeText(text).then(()=>toast('success', 'Lien du point de rencontre copié.')).catch(()=>toast('error', 'Copie impossible sur cet appareil.'));
+                }}>Copier le lien</button>
+              </div>
+              <p className="form-hint" style={{marginTop:8}}>Privilégiez un lieu public et prévenez un proche de votre déplacement.</p>
+            </>
+          )}
+        </div>
+      ) : null}
+
           {/* DESCRIPTION */}
           <div className="detail__desc">
             <h2 className="detail__h">Description</h2>
@@ -491,14 +578,14 @@ export default function ListingDetail() {
               <h2 className="detail__h">Vendeur</h2>
               <div className="seller-box">
                 <span className="seller-box__avatar">
-                  {seller.avatar_url ? (
-                    <img src={seller.avatar_url} alt="" />
+                  {safeMediaUrl(seller.avatar_url) ? (
+                    <img src={safeMediaUrl(seller.avatar_url)!} alt="" />
                   ) : (
-                    (seller.display_name || 'V').slice(0, 1).toUpperCase()
+                    (seller.display_name || seller.username || 'V').slice(0, 1).toUpperCase()
                   )}
                 </span>
                 <div className="seller-box__info">
-                  <Link to={`/vendeur/${seller.id}`} className="seller-box__name">
+                  <Link to={`/vendeur/${seller.username || seller.id}`} className="seller-box__name">
                     {seller.display_name || 'Vendeur'}
                     {seller.is_demo && <span className="badge badge--demo">Démo</span>}
                     {sellerVerified && !seller.is_demo && (
@@ -508,13 +595,21 @@ export default function ListingDetail() {
                     )}
                   </Link>
                   <p className="seller-box__meta">
+                    {seller.username ? `@${seller.username} · ` : ''}
                     {ACCOUNT_TYPE_LABELS[seller.account_type] || 'Particulier'}
                     {seller.city ? ` · ${seller.city}` : ''}
                   </p>
                 </div>
-                <Link to={`/vendeur/${seller.id}`} className="btn btn--ghost btn--sm">
-                  Voir le profil
-                </Link>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <FollowButton
+                    targetUserId={seller.id}
+                    targetName={seller.display_name || (seller.username ? `@${seller.username}` : 'ce vendeur')}
+                    size="sm"
+                  />
+                  <Link to={`/vendeur/${seller.username || seller.id}`} className="btn btn--ghost btn--sm">
+                    Voir le profil
+                  </Link>
+                </div>
               </div>
             </div>
           )}
@@ -531,6 +626,31 @@ export default function ListingDetail() {
             ))}
           </div>
         </section>
+      )}
+
+      {/* BARRE D'ACTION MOBILE (contextuelle : remplace la nav basse sur la fiche) */}
+      {(wa || tel) && (
+        <div className="detail__actionbar">
+          <button
+            type="button"
+            className={`actionbar__icon${isFav ? ' actionbar__icon--fav' : ''}`}
+            onClick={onFavorite}
+            disabled={favBusy}
+            aria-label={isFav ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+          >
+            <Icon name="heart" size={19} />
+          </button>
+          {tel && (
+            <a className="btn btn--ghost" href={tel}>
+              <Icon name="phone" size={17} /> Appeler
+            </a>
+          )}
+          {wa && (
+            <a className="btn btn--whatsapp" href={wa} target="_blank" rel="noopener noreferrer">
+              <Icon name="whatsapp" size={18} /> WhatsApp
+            </a>
+          )}
+        </div>
       )}
 
       {/* MODAL SIGNALEMENT */}
@@ -567,6 +687,15 @@ export default function ListingDetail() {
           </button>
         </div>
       </Modal>
+
+      {lightboxOpen && (
+        <GalleryLightbox
+          images={item.images}
+          start={activeImg}
+          title={listing.title}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </div>
   );
 }

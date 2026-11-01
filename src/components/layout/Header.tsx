@@ -1,57 +1,65 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Logo } from '../Logo';
 import { Icon } from '../Icon';
 import { SearchBar } from '../SearchBar';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { demoMode, fetchLocalities, fetchUnreadCount, subscribeToNewMessages } from '../../lib/api';
+import { useNotifications } from '../../context/NotificationsContext';
+import { NotificationList } from '../NotificationList';
+import { DrawerSparkles } from '../ui/DrawerSparkles';
+import { ThemeToggle } from './ThemeToggle';
+import { useTheme } from '../../hooks/useTheme';
+import { demoMode, fetchLocalities } from '../../lib/api';
+import { safeMediaUrl } from '../../lib/security';
 import type { Locality } from '../../lib/types';
+import '../../styles/signup-attract.css';
 
 export function Header() {
   const { session, profile, isAdmin, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isSignupPage = pathname === '/inscription';
   const [localities, setLocalities] = useState<Locality[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
-  const [unread, setUnread] = useState(0);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const { total: notifTotal, unreadTotal: unread } = useNotifications();
+  const { theme: uiTheme } = useTheme();
   const userRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  // Ombre discrète du header dès que la page est défilée.
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 4);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     fetchLocalities().then(setLocalities).catch(() => undefined);
   }, []);
 
-  // Badge « messages non lus » (temps réel).
-  const refreshUnread = () => {
-    fetchUnreadCount().then(setUnread).catch(() => undefined);
-  };
-  useEffect(() => {
-    if (!session || demoMode) {
-      setUnread(0);
-      return;
-    }
-    refreshUnread();
-    const unsub = subscribeToNewMessages(() => refreshUnread());
-    return unsub;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session]);
-
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (userRef.current && !userRef.current.contains(e.target as Node)) setUserMenuOpen(false);
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  // Fermer le tiroir mobile à la navigation
+  // Fermer le tiroir mobile et les menus à chaque changement de route
   useEffect(() => {
     setMenuOpen(false);
     setUserMenuOpen(false);
     setCatOpen(false);
-  }, [navigate]);
+    setNotifOpen(false);
+  }, [pathname]);
 
   const onSignOut = async () => {
     await signOut();
@@ -61,7 +69,20 @@ export function Header() {
 
   return (
     <>
-    <header className="header">
+    {/* Overlay translucide : quand un menu déroulant est ouvert, le reste de
+        la page « recule » (faible opacité + léger flou) — et un tap/clic
+        n'importe où le ferme. */}
+    {(notifOpen || userMenuOpen) && (
+      <div
+        className="menu-overlay"
+        aria-hidden="true"
+        onClick={() => {
+          setNotifOpen(false);
+          setUserMenuOpen(false);
+        }}
+      />
+    )}
+    <header className={`header${scrolled ? ' header--scrolled' : ''}`}>
       <div className="header__inner container">
         <button
           type="button"
@@ -83,13 +104,43 @@ export function Header() {
           <Link to="/annonces" className="header__link">
             Catalogue
           </Link>
+          <Link to="/utilisateurs" className="header__link" title="Rechercher par @utilisateur ou ID">
+            Membres
+          </Link>
           <Link to="/publier" className="btn btn--gold">
             <Icon name="plus" size={16} />
             <span>Publier</span>
           </Link>
+          <ThemeToggle />
           <Link to="/compte/favoris" className="icon-btn header__fav" aria-label="Mes favoris">
             <Icon name="heart" size={20} />
           </Link>
+          {session && !demoMode && (
+            <div className="header__notif" ref={notifRef}>
+              <button
+                type="button"
+                className="icon-btn"
+                aria-label={
+                  notifTotal
+                    ? `Notifications — ${notifTotal} nouvelle${notifTotal > 1 ? 's' : ''}`
+                    : 'Notifications'
+                }
+                aria-haspopup="menu"
+                aria-expanded={notifOpen}
+                onClick={() => setNotifOpen((v) => !v)}
+              >
+                <Icon name="bell" size={20} />
+                {notifTotal > 0 && (
+                  <span className="header__msg-badge">{notifTotal > 9 ? '9+' : notifTotal}</span>
+                )}
+              </button>
+              {notifOpen && (
+                <div className="dropdown dropdown--notif" role="menu">
+                  <NotificationList />
+                </div>
+              )}
+            </div>
+          )}
           {session && !demoMode && (
             <Link
               to="/messages"
@@ -110,8 +161,8 @@ export function Header() {
                 aria-expanded={userMenuOpen}
                 onClick={() => setUserMenuOpen((v) => !v)}
               >
-                {profile.avatar_url ? (
-                  <img src={profile.avatar_url} alt="" className="header__avatar" />
+                {safeMediaUrl(profile.avatar_url) ? (
+                  <img src={safeMediaUrl(profile.avatar_url)!} alt="" className="header__avatar" />
                 ) : (
                   <span className="header__avatar header__avatar--ph" aria-hidden="true">
                     {(profile.display_name || profile.pseudonym || 'U').slice(0, 1).toUpperCase()}
@@ -121,7 +172,17 @@ export function Header() {
               </button>
               {userMenuOpen && (
                 <div className="dropdown" role="menu">
-                  <p className="dropdown__name">{profile.display_name || 'Mon compte'}</p>
+                  <p className="dropdown__name">
+                    {profile.display_name || 'Mon compte'}
+                    {profile.username && (
+                      <span style={{ display: 'block', fontSize: 12, fontWeight: 500, color: 'var(--text-2)' }}>
+                        @{profile.username}
+                      </span>
+                    )}
+                  </p>
+                  <Link to={`/vendeur/${profile.username || profile.id}`} className="dropdown__item" role="menuitem">
+                    <Icon name="user" size={16} /> Mon profil public
+                  </Link>
                   <Link to="/compte" className="dropdown__item" role="menuitem">
                     <Icon name="tag" size={16} /> Mes annonces
                   </Link>
@@ -147,8 +208,13 @@ export function Header() {
               <Link to="/connexion" className="header__link header__link--login">
                 Connexion
               </Link>
-              <Link to="/inscription" className="btn btn--primary">
-                S'inscrire
+              <Link
+                to="/inscription"
+                className={`btn btn--primary btn--signup-attract${isSignupPage ? ' btn--signup-attract--calm' : ''}`}
+              >
+                <span className="btn__shine" aria-hidden="true" />
+                <span className="btn__spark-dot" aria-hidden="true" />
+                <span className="btn__signup-label">S'inscrire</span>
               </Link>
             </div>
           )}
@@ -163,6 +229,7 @@ export function Header() {
       <div className="drawer-overlay" onClick={() => setMenuOpen(false)} />
     )}
     <aside className={`drawer${menuOpen ? ' drawer--open' : ''}`} aria-hidden={!menuOpen}>
+        <DrawerSparkles active={menuOpen} />
         <div className="drawer__head">
           <Logo variant="dark" compact as="div" />
           <button type="button" className="icon-btn" aria-label="Fermer le menu" onClick={() => setMenuOpen(false)}>
@@ -175,6 +242,9 @@ export function Header() {
         <nav className="drawer__nav" aria-label="Menu principal">
           <NavLink to="/annonces" onClick={() => setMenuOpen(false)}>
             <Icon name="grid" size={18} /> Catalogue complet
+          </NavLink>
+          <NavLink to="/utilisateurs" onClick={() => setMenuOpen(false)}>
+            <Icon name="users" size={18} /> Chercher un membre (@pseudo / ID)
           </NavLink>
           <NavLink to="/publier" onClick={() => setMenuOpen(false)}>
             <Icon name="plus" size={18} /> Publier une annonce
@@ -191,6 +261,19 @@ export function Header() {
               {unread > 0 ? `Messages (${unread})` : 'Messages'}
             </NavLink>
           )}
+          {session && !demoMode && (
+            <NavLink to="/notifications" onClick={() => setMenuOpen(false)}>
+              <Icon name="bell" size={18} />
+              {notifTotal > 0 ? `Notifications (${notifTotal})` : 'Notifications'}
+            </NavLink>
+          )}
+          <div className="drawer__row">
+            <span className="drawer__row-label">
+              <Icon name={uiTheme === 'dark' ? 'sun' : 'moon'} size={18} />
+              Apparence
+            </span>
+            <ThemeToggle label />
+          </div>
           <NavLink to="/application" onClick={() => setMenuOpen(false)}>
             <Icon name="download" size={18} /> Télécharger l'application
           </NavLink>
@@ -218,11 +301,17 @@ export function Header() {
         </div>
         {!session && (
           <div className="drawer__auth">
-            <Link to="/connexion" onClick={() => setMenuOpen(false)} className="btn btn--primary">
-              Connexion
+            <Link
+              to="/inscription"
+              onClick={() => setMenuOpen(false)}
+              className={`btn btn--primary btn--signup-attract${isSignupPage ? ' btn--signup-attract--calm' : ''}`}
+            >
+              <span className="btn__shine" aria-hidden="true" />
+              <span className="btn__spark-dot" aria-hidden="true" />
+              <span className="btn__signup-label">S'inscrire gratuitement</span>
             </Link>
-            <Link to="/inscription" onClick={() => setMenuOpen(false)} className="btn btn--ghost">
-              Créer un compte
+            <Link to="/connexion" onClick={() => setMenuOpen(false)} className="btn btn--ghost">
+              Connexion
             </Link>
           </div>
         )}

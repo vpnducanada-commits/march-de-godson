@@ -1,5 +1,7 @@
+import { cacheListings, getCachedListings } from './idb';
 import { supabase, isSupabaseConfigured, publishableKey, supabaseUrl } from './supabase';
 import { normalizeText, escapeLike, slugify, randomSuffix } from './normalize';
+import { isUuid, safeMediaUrl, verifyMagicBytes } from './security';
 import {
   demoCategories,
   demoLocalities,
@@ -19,9 +21,18 @@ import type {
   PageResult,
   Profile,
   Report,
+  SearchedUser,
+  UserNotification,
 } from './types';
+import { shortUserId } from './types';
 
 export class ApiError extends Error {}
+export class ListingModerationError extends ApiError {
+  constructor(message: string, public readonly slug: string) {
+    super(message);
+    this.name = 'ListingModerationError';
+  }
+}
 
 /** Mode démo : pas de variables Supabase → données locales d'exemple. */
 export const demoMode = !isSupabaseConfigured;
@@ -33,18 +44,52 @@ function requireClient() {
 
 function toApiError(err: unknown, fallback: string): ApiError {
   if (err instanceof ApiError) return err;
-  const e = err as { message?: string; code?: string };
+  const e = err as { message?: string; code?: string; details?: string };
   if (e?.code === 'PGRST116') return new ApiError('Aucune annonce trouvée avec ces critères.');
-  return new ApiError(e?.message ? `Erreur : ${e.message}` : fallback);
+  if (e?.code === '23505' && `${e.message || ''} ${e.details || ''}`.toLowerCase().includes('username')) {
+    return new ApiError('Ce nom d\u2019utilisateur est déjà pris. Choisissez-en un autre.');
+  }
+  if (e?.code === '23505' && `${e.message || ''} ${e.details || ''}`.toLowerCase().includes('reviews')) {
+    return new ApiError('Vous avez déjà publié un avis pour ce vendeur.');
+  }
+  if (e?.code === '23505' && `${e.message || ''} ${e.details || ''}`.toLowerCase().includes('reports')) {
+    return new ApiError('Vous avez déjà un signalement en cours d\u2019examen pour cette annonce.');
+  }
+  const msg = e?.message || '';
+  for (const tag of [
+    'DELAI_30_JOURS:',
+    'NOM_UTILISATEUR_INVALIDE:',
+    'NOM_UTILISATEUR_REQUIS:',
+    'ACTION_INTERDITE:',
+    'ANNONCE_REFUSEE:',
+    'TROP_DE_MESSAGES:',
+    'MESSAGE_IMMUABLE:',
+    'LIMITE_IMAGES:',
+    'AVATAR_INVALIDE:',
+  ]) {
+    if (msg.includes(tag)) {
+      return new ApiError(msg.split(tag)[1]?.trim() || fallback);
+    }
+  }
+  return new ApiError(msg ? `Erreur : ${msg}` : fallback);
 }
 
 /** Résout l'image principale d'une annonce : stockage Supabase ou image démo locale. */
 export function resolveListingImage(listing: Listing, storageUrl: string | null): string {
-  if (storageUrl) return storageUrl;
+  const safe = safeMediaUrl(storageUrl);
+  if (safe) return safe;
   if (listing.is_demo) return demoImagesBySlug[listing.slug] || '/demo/placeholder.svg';
   return '/demo/placeholder.svg';
 }
 
+function sanitizeProfile(p: Profile): Profile {
+  return {
+    ...p,
+    avatar_url: safeMediaUrl(p.avatar_url),
+  };
+}
+
+function storageUrlForVideo(path: string | null): string | null { if(!path) return null; try{ const sb=requireClient(); const { data } = sb.storage.from('listing-videos').getPublicUrl(path); return data.publicUrl; }catch{ return null; } }
 function storageUrlFor(path: string): string {
   const sb = requireClient();
   const { data } = sb.storage.from('listing-images').getPublicUrl(path);
@@ -61,17 +106,23 @@ function assembleFull(row: RowWithJoins, seller: Profile | null): ListingFull {
   const catRow = row.category;
   const isSub = catRow?.parent_id != null;
   const listing = row as unknown as Listing;
-  const images = (row.listing_images || [])
-    .slice()
-    .sort((a, b) => a.position - b.position)
-    .map((img) => resolveListingImage(listing, img.storage_path ? storageUrlFor(img.storage_path) : null));
+  const sortedImgs = (row.listing_images || []).slice().sort((a, b) => a.position - b.position);
+  const images = sortedImgs.map((img) =>
+    resolveListingImage(listing, img.storage_path ? storageUrlFor(img.storage_path) : null),
+  );
+  const imagePaths = sortedImgs.map((img) => img.storage_path ?? null);
+  const rawVideoUrl = (listing as any).video_url
+    ? storageUrlForVideo((listing as any).video_path) || (listing as any).video_url
+    : null;
   return {
     listing,
     category: catRow ?? null,
     subcategory: isSub ? catRow : null,
     city: row.city ?? null,
     images: images.length ? images : [resolveListingImage(listing, null)],
-    seller,
+    imagePaths: images.length ? imagePaths : [null],
+    videoUrl: safeMediaUrl(rawVideoUrl),
+    seller: seller ? sanitizeProfile(seller) : null,
   };
 }
 
@@ -113,6 +164,84 @@ export async function fetchLocalities(): Promise<Locality[]> {
   return (data || []) as Locality[];
 }
 
+export async function fetchCategoryCounts(): Promise<Record<string, number>> {
+  if (demoMode) {
+    const m: Record<string, number> = {};
+    for (const c of demoCategories) if (c.parent_id === null) { const items:any[] = (demoListings as any).items || (demoListings as any) || []; const arr = Array.isArray(items)?items:[]; m[c.slug] = arr.filter((i:any) => i.category?.slug === c.slug || i.listing.category_id === c.id).length; }
+    return m;
+  }
+  const sb = requireClient();
+  const cats = await sb.from('categories').select('id,slug,parent_id').eq('status','active');
+  if (cats.error) return {};
+  const counts: Record<string, number> = {};
+  await Promise.all((cats.data||[]).filter(c=>c.parent_id===null).map(async (c)=>{
+    const childIds = (cats.data||[]).filter(x=>x.parent_id===c.id).map(x=>x.id);
+    const ids = [c.id, ...childIds];
+    const { count } = await sb.from('listings').select('id', {count:'exact', head:true}).eq('status','active').gt('expires_at', new Date().toISOString()).in('category_id', ids);
+    counts[c.slug] = count ?? 0;
+  }));
+  return counts;
+}
+export function haversine(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/** Coordonnées géographiques de référence des localités gabonaises (repli honnête quand l'annonce n'a pas de point GPS précis). */
+const LOCALITY_COORDS: Record<string, [number, number]> = {
+  libreville: [0.4162, 9.4673],
+  owendo: [0.2958, 9.503],
+  ntoum: [0.3853, 9.761],
+  akanda: [0.543, 9.3947],
+  kotto: [0.452, 9.442],
+  komo: [0.15, 10.133],
+  'cap-esterias': [0.6122, 9.3275],
+  'port-gentil': [-0.7193, 8.7815],
+  moebete: [-0.85, 8.92],
+  makokou: [0.5738, 12.8642],
+  franceville: [-1.6333, 13.5836],
+  moanda: [-1.5665, 13.1987],
+  mvengue: [-1.656, 13.43],
+  bitanda: [-1.52, 13.31],
+  lambarene: [-0.7001, 10.2406],
+  tchibanga: [-2.9332, 10.9818],
+  mouila: [-1.8685, 11.0559],
+  kango: [0.1939, 10.103],
+  'port-louis': [-0.75, 8.85],
+  oyem: [1.5995, 11.5793],
+  djambala: [-1.54, 13.75],
+};
+
+function resolveItemCoords(item: ListingFull): { lat: number; lng: number; exact: boolean } | null {
+  if (
+    item.listing.latitude != null &&
+    item.listing.longitude != null &&
+    Number.isFinite(item.listing.latitude) &&
+    Number.isFinite(item.listing.longitude)
+  ) {
+    return { lat: item.listing.latitude, lng: item.listing.longitude, exact: true };
+  }
+  if (
+    item.seller?.shop_lat != null &&
+    item.seller?.shop_lng != null &&
+    Number.isFinite(item.seller.shop_lat) &&
+    Number.isFinite(item.seller.shop_lng)
+  ) {
+    return { lat: item.seller.shop_lat, lng: item.seller.shop_lng, exact: true };
+  }
+  const slug = item.city?.slug;
+  if (slug && LOCALITY_COORDS[slug]) {
+    return { lat: LOCALITY_COORDS[slug][0], lng: LOCALITY_COORDS[slug][1], exact: false };
+  }
+  return null;
+}
+
+const NEARBY_RADIUS_KM = 85;
 async function fetchProfilesByIds(ids: string[]): Promise<Map<string, Profile>> {
   const map = new Map<string, Profile>();
   if (!ids.length) return map;
@@ -121,8 +250,10 @@ async function fetchProfilesByIds(ids: string[]): Promise<Map<string, Profile>> 
     return map;
   }
   const sb = requireClient();
-  const { data } = await sb.from('profiles').select('*').in('id', ids);
-  for (const p of data || []) map.set((p as Profile).id, p as Profile);
+  const validIds = ids.filter((id) => isUuid(id));
+  if (!validIds.length) return map;
+  const { data } = await sb.from('profiles').select('*').in('id', validIds);
+  for (const p of data || []) map.set((p as Profile).id, sanitizeProfile(p as Profile));
   return map;
 }
 
@@ -135,14 +266,26 @@ export async function fetchListings(query: ListingQuery): Promise<PageResult> {
   const sb = requireClient();
   const pageSize = query.pageSize ?? 12;
   const page = query.page ?? 1;
+  const hasNear =
+    query.lat !== undefined &&
+    query.lng !== undefined &&
+    Number.isFinite(query.lat) &&
+    Number.isFinite(query.lng);
+
   let q = sb
     .from('listings')
     .select(LISTING_SELECT, { count: 'exact' })
     .eq('status', 'active')
     // Double sécurité avec la politique RLS : jamais d'annonce expirée au catalogue.
     .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false })
-    .range((page - 1) * pageSize, page * pageSize - 1);
+    .order('created_at', { ascending: false });
+
+  if (hasNear) {
+    // En mode proximité, on récupère l'ensemble des annonces actives filtrées pour trier par distance réelle
+    q = q.range(0, 299);
+  } else {
+    q = q.range((page - 1) * pageSize, page * pageSize - 1);
+  }
 
   if (query.q) {
     const nq = escapeLike(normalizeText(query.q.trim()));
@@ -165,20 +308,53 @@ export async function fetchListings(query: ListingQuery): Promise<PageResult> {
   if (query.maxPrice !== undefined && !Number.isNaN(query.maxPrice)) q = q.lte('price', query.maxPrice);
   if (query.condition) q = q.eq('condition', query.condition);
 
-  if (query.sort === 'price_asc') {
-    q = q.order('price.asc.nullsfirst').order('created_at.desc');
-  } else if (query.sort === 'price_desc') {
-    q = q.order('price.desc.nullslast').order('created_at.desc');
+  if (!hasNear) {
+    if (query.sort === 'price_asc') {
+      q = q.order('price.asc.nullsfirst').order('created_at.desc');
+    } else if (query.sort === 'price_desc') {
+      q = q.order('price.desc.nullslast').order('created_at.desc');
+    }
   }
 
-  const { data, error, count } = await q;
+  let data, error, count;
+  try {
+    const r = await q;
+    data = r.data;
+    error = r.error;
+    count = r.count;
+    if (error) throw error;
+  } catch (e) {
+    const cached = await getCachedListings();
+    if (cached.length) return { items: cached.slice(0, pageSize), total: cached.length, page, pageSize };
+    throw toApiError(e, 'Recherche impossible (hors ligne).');
+  }
   if (error) throw toApiError(error, 'Recherche impossible.');
   const sellerIds = Array.from(new Set((data || []).map((r) => r.seller_id)));
   const sellers = await fetchProfilesByIds(sellerIds);
-  const items = (data || []).map((row) =>
+  const allItems = (data || []).map((row) =>
     assembleFull(row as RowWithJoins, sellers.get(row.seller_id) ?? null),
   );
-  return { items, total: count ?? 0, page, pageSize };
+  if (!hasNear) {
+    void cacheListings(allItems).catch(() => {});
+    return { items: allItems, total: count ?? 0, page, pageSize };
+  }
+
+  const uLat = query.lat as number;
+  const uLng = query.lng as number;
+  const enriched = allItems.map((it) => {
+    const c = resolveItemCoords(it);
+    const dist = c ? haversine(uLat, uLng, c.lat, c.lng) : null;
+    return { ...it, distanceKm: dist };
+  });
+  const withinRadius = enriched.filter((it) => it.distanceKm !== null && it.distanceKm <= NEARBY_RADIUS_KM);
+  const pool = withinRadius.length > 0 ? withinRadius : enriched.filter((it) => it.distanceKm !== null);
+  pool.sort((a, b) => {
+    if (query.sort === 'price_asc') return (a.listing.price ?? -1) - (b.listing.price ?? -1);
+    if (query.sort === 'price_desc') return (b.listing.price ?? -Infinity) - (a.listing.price ?? -Infinity);
+    return (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity);
+  });
+  const paged = pool.slice((page - 1) * pageSize, page * pageSize);
+  return { items: paged, total: pool.length, page, pageSize };
 }
 
 function demoAssembleFull(l: Listing): ListingFull {
@@ -214,6 +390,23 @@ function demoListingsQuery(query: ListingQuery): PageResult {
   if (query.maxPrice !== undefined && !Number.isNaN(query.maxPrice))
     items = items.filter((f) => f.listing.price !== null && f.listing.price <= (query.maxPrice as number));
   if (query.condition) items = items.filter((f) => f.listing.condition === query.condition);
+  if (
+    query.lat !== undefined &&
+    query.lng !== undefined &&
+    Number.isFinite(query.lat) &&
+    Number.isFinite(query.lng)
+  ) {
+    const uLat = query.lat;
+    const uLng = query.lng;
+    const enriched = items.map((it) => {
+      const c = resolveItemCoords(it);
+      return { ...it, distanceKm: c ? haversine(uLat, uLng, c.lat, c.lng) : null };
+    });
+    const near = enriched.filter((it) => it.distanceKm !== null && it.distanceKm <= NEARBY_RADIUS_KM);
+    items = (near.length ? near : enriched).sort(
+      (a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity),
+    );
+  }
   if (query.sort === 'price_asc') {
     items = [...items].sort((a, b) => (a.listing.price ?? -1) - (b.listing.price ?? -1));
   } else if (query.sort === 'price_desc') {
@@ -260,7 +453,27 @@ export async function fetchSellerListings(
     .order('created_at', { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
   if (opts.status) q = q.eq('status', opts.status);
-  const { data, error, count } = await q;
+  let data, error, count;
+  try {
+    const r = await q;
+    data = r.data;
+    error = r.error;
+    count = r.count;
+    if (error) throw error;
+  } catch (e) {
+    const cached = (await getCachedListings()).filter(
+      (c) => c.listing.seller_id === sellerId && (!opts.status || c.listing.status === opts.status),
+    );
+    if (cached.length) {
+      return {
+        items: cached.slice((page - 1) * pageSize, page * pageSize),
+        total: cached.length,
+        page,
+        pageSize,
+      };
+    }
+    throw toApiError(e, 'Chargement impossible (hors ligne).');
+  }
   if (error) throw toApiError(error, 'Chargement impossible.');
   const seller = (await fetchProfilesByIds([sellerId])).get(sellerId) ?? null;
   return {
@@ -271,12 +484,51 @@ export async function fetchSellerListings(
   };
 }
 
-export async function fetchSeller(id: string): Promise<Profile | null> {
-  if (demoMode) return id === demoSeller.id ? demoSeller : null;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export async function fetchSeller(idOrUsername: string): Promise<Profile | null> {
+  const clean = decodeURIComponent(idOrUsername || '').trim().replace(/^[@#]+/, '');
+  if (!clean) return null;
+  if (demoMode) {
+    if (
+      clean === demoSeller.id ||
+      shortUserId(demoSeller.id) === clean.toLowerCase() ||
+      (demoSeller.username && demoSeller.username.toLowerCase() === clean.toLowerCase())
+    ) {
+      return demoSeller;
+    }
+    return null;
+  }
   const sb = requireClient();
-  const { data, error } = await sb.from('profiles').select('*').eq('id', id).maybeSingle();
-  if (error) throw toApiError(error, 'Profil introuvable.');
-  return (data as Profile | null) ?? null;
+  if (UUID_RE.test(clean)) {
+    const { data, error } = await sb.from('profiles').select('*').eq('id', clean).maybeSingle();
+    if (error) throw toApiError(error, 'Profil introuvable.');
+    return data ? sanitizeProfile(data as Profile) : null;
+  }
+  // Recherche directe par @username exact (validation stricte sans jokers SQL % ou _)
+  if (/^[a-z0-9_.-]{2,32}$/i.test(clean)) {
+    const { data: byUsername, error: userErr } = await sb
+      .from('profiles')
+      .select('*')
+      .eq('username', clean.toLowerCase())
+      .maybeSingle();
+    if (!userErr && byUsername) return sanitizeProfile(byUsername as Profile);
+  }
+
+  // Sinon, tentative via préfixe d'ID court (ex. 8 caractères)
+  if (/^[0-9a-f-]{4,36}$/i.test(clean)) {
+    const matches = await searchUsers(clean, 5).catch(() => []);
+    const exactPrefix = matches.find(
+      (u) =>
+        u.id.toLowerCase() === clean.toLowerCase() ||
+        u.id.replace(/-/g, '').toLowerCase().startsWith(clean.replace(/-/g, '').toLowerCase()),
+    );
+    if (exactPrefix) {
+      const { data } = await sb.from('profiles').select('*').eq('id', exactPrefix.id).maybeSingle();
+      return data ? sanitizeProfile(data as Profile) : null;
+    }
+  }
+  return null;
 }
 
 // ============================================================
@@ -360,7 +612,21 @@ export interface PublishInput {
   seller_type: string;
   contact_phone: string | null;
   contact_whatsapp: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  location_label?: string | null;
   imageFiles: (File | Blob)[];
+  videoFile?: File | Blob | null;
+}
+
+async function runGeminiListingModeration(listingId: string): Promise<void> {
+  const sb = requireClient();
+  const { data, error } = await sb.functions.invoke('gemini-moderate-listing', { body: { listingId } });
+  if (error) throw new ApiError('Le contrôle automatique est indisponible. Votre annonce reste masquée; réessayez plus tard.');
+  const result = data as { outcome?: string; message?: string } | null;
+  if (!result || result.outcome !== 'approved') {
+    throw new ApiError(result?.message || 'Annonce bloquée par le contrôle automatique. Corrigez le contenu ou ajoutez une photo/vidéo plus claire.');
+  }
 }
 
 export async function publishListing(userId: string, input: PublishInput): Promise<string> {
@@ -382,7 +648,10 @@ export async function publishListing(userId: string, input: PublishInput): Promi
       seller_type: input.seller_type,
       contact_phone: input.contact_phone?.trim() || null,
       contact_whatsapp: input.contact_whatsapp?.trim() || null,
-      status: 'active',
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
+      location_label: input.location_label?.trim() || null,
+      status: 'pending',
     })
     .select('id')
     .single();
@@ -397,7 +666,8 @@ export async function publishListing(userId: string, input: PublishInput): Promi
   const listingId = (created as { id: string }).id;
 
   // L'annonce n'est complète que si le stockage confirme chaque image.
-  const uploaded: string[] = [];
+  const uploadedImages: string[] = [];
+  let uploadedVideo: string | null = null;
   try {
     for (let i = 0; i < input.imageFiles.length; i++) {
       const file = input.imageFiles[i];
@@ -406,19 +676,46 @@ export async function publishListing(userId: string, input: PublishInput): Promi
         .from('listing-images')
         .upload(path, file, { contentType: 'image/jpeg', upsert: false });
       if (upErr) throw toApiError(upErr, 'L\u2019envoi d\u2019une image a échoué.');
-      uploaded.push(path);
+      uploadedImages.push(path);
       const { error: rowErr } = await sb
         .from('listing_images')
         .insert({ listing_id: listingId, storage_path: path, position: i });
       if (rowErr) throw toApiError(rowErr, 'L\u2019enregistrement d\u2019une image a échoué.');
     }
+    // Vidéo optionnelle (≤180s, 80 Mo) -> bucket listing-videos
+    if (input.videoFile) {
+      const rawType = (input.videoFile as File).type || 'video/mp4';
+      const safeVideoType = ['video/mp4', 'video/webm', 'video/quicktime'].includes(rawType)
+        ? rawType
+        : null;
+      if (!safeVideoType || !(await verifyMagicBytes(input.videoFile, 'video'))) {
+        throw new ApiError('Format vidéo non autorisé (utilisez MP4, WebM ou MOV).');
+      }
+      const ext = safeVideoType === 'video/webm' ? 'webm' : safeVideoType === 'video/quicktime' ? 'mov' : 'mp4';
+      const vPath = `${userId}/${Date.now()}-video-${randomSuffix()}.${ext}`;
+      const { error: vUpErr } = await sb.storage.from('listing-videos').upload(vPath, input.videoFile, { contentType: safeVideoType, upsert: false });
+      if (vUpErr) throw toApiError(vUpErr, 'L\u2019envoi de la vidéo a échoué.');
+      uploadedVideo = vPath;
+      const vUrl = storageUrlForVideo(vPath) || '';
+      const { error: vRowErr } = await sb.from('listings').update({ video_url: vUrl, video_path: vPath }).eq('id', listingId);
+      if (vRowErr) throw toApiError(vRowErr, 'L\u2019enregistrement de la vidéo a échoué.');
+    }
   } catch (e) {
-    // Nettoyage : pas d'annonce incomplète laissée en base.
-    if (uploaded.length) {
-      await sb.storage.from('listing-images').remove(uploaded).then(() => undefined, () => undefined);
+    // Nettoyage : pas d'annonce ni de média orphelin laissés en base / Storage.
+    if (uploadedImages.length) {
+      await sb.storage.from('listing-images').remove(uploadedImages).then(() => undefined, () => undefined);
+    }
+    if (uploadedVideo) {
+      await sb.storage.from('listing-videos').remove([uploadedVideo]).then(() => undefined, () => undefined);
     }
     await sb.from('listings').delete().eq('id', listingId).then(() => undefined, () => undefined);
     throw e;
+  }
+  // Publication is server-approved only. On rejection or AI outage the listing remains hidden.
+  try {
+    await runGeminiListingModeration(listingId);
+  } catch (error) {
+    throw new ListingModerationError(error instanceof Error ? error.message : 'Annonce en attente de contrôle.', slug);
   }
   return slug;
 }
@@ -430,40 +727,60 @@ export async function updateListing(
     status?: string;
     newImages?: (File | Blob)[];
     removeImagePaths?: string[];
+    removeVideo?: boolean;
   },
 ): Promise<void> {
   const sb = requireClient();
   const { data: listing, error: selErr } = await sb
     .from('listings')
-    .select('id, seller_id')
+    .select('id, seller_id, video_path')
     .eq('slug', slug)
     .single();
   if (selErr || !listing) throw new ApiError('Annonce introuvable.');
-  const row = listing as { id: string; seller_id: string };
+  const row = listing as { id: string; seller_id: string; video_path?: string | null };
   if (row.seller_id !== userId) throw new ApiError('Vous ne pouvez modifier que vos propres annonces.');
 
-  const { error: upErr } = await sb
-    .from('listings')
-    .update({
-      title: input.title.trim(),
-      category_id: input.category_id,
-      description: input.description.trim(),
-      price: input.price,
-      negotiable: input.negotiable,
-      city_id: input.city_id,
-      area: input.area?.trim() || null,
-      condition: input.condition || null,
-      seller_type: input.seller_type,
-      contact_phone: input.contact_phone?.trim() || null,
-      contact_whatsapp: input.contact_whatsapp?.trim() || null,
-      ...(input.status ? { status: input.status } : {}),
-    })
-    .eq('id', row.id);
+  const patch: Record<string, unknown> = {
+    title: input.title.trim(),
+    category_id: input.category_id,
+    description: input.description.trim(),
+    price: input.price,
+    negotiable: input.negotiable,
+    city_id: input.city_id,
+    area: input.area?.trim() || null,
+    condition: input.condition || null,
+    seller_type: input.seller_type,
+    contact_phone: input.contact_phone?.trim() || null,
+    contact_whatsapp: input.contact_whatsapp?.trim() || null,
+  };
+  // Ne met à jour les coordonnées GPS que lorsqu'elles sont explicitement fournies (préserve le GPS à l'archivage)
+  if (input.latitude !== undefined && input.longitude !== undefined) {
+    patch.latitude = input.latitude;
+    patch.longitude = input.longitude;
+  }
+  if (input.location_label !== undefined) {
+    patch.location_label = input.location_label?.trim() || null;
+  }
+  // Any edited listing is hidden while Gemini rechecks its text and media.
+  patch.status = 'pending';
+
+  const { error: upErr } = await sb.from('listings').update(patch).eq('id', row.id);
   if (upErr) throw toApiError(upErr, 'La modification a échoué.');
 
-  for (const p of input.removeImagePaths || []) {
-    await sb.storage.from('listing-images').remove([p]).then(() => undefined, () => undefined);
-    await sb.from('listing_images').delete().eq('storage_path', p);
+  const toRemove = (input.removeImagePaths || []).filter((p): p is string => Boolean(p && p.trim()));
+  if (toRemove.length) {
+    const { data: ownedImgs } = await sb
+      .from('listing_images')
+      .select('storage_path')
+      .eq('listing_id', row.id)
+      .in('storage_path', toRemove);
+    const verifiedPaths = (ownedImgs || [])
+      .map((x) => x.storage_path as string | null)
+      .filter((p): p is string => Boolean(p));
+    if (verifiedPaths.length) {
+      await sb.from('listing_images').delete().eq('listing_id', row.id).in('storage_path', verifiedPaths);
+      await sb.storage.from('listing-images').remove(verifiedPaths).then(() => undefined, () => undefined);
+    }
   }
   if (input.newImages?.length) {
     const { data: existing } = await sb
@@ -471,7 +788,8 @@ export async function updateListing(
       .select('position')
       .eq('listing_id', row.id)
       .order('position', { ascending: true });
-    const start = (existing || []).length;
+    const maxPos = (existing || []).reduce((m, r) => Math.max(m, Number((r as { position: number }).position) || 0), -1);
+    const start = maxPos + 1;
     for (let i = 0; i < input.newImages.length; i++) {
       const path = `${userId}/${Date.now()}-${start + i}-${randomSuffix()}.jpg`;
       const { error: upErr2 } = await sb.storage
@@ -481,24 +799,66 @@ export async function updateListing(
       await sb.from('listing_images').insert({ listing_id: row.id, storage_path: path, position: start + i });
     }
   }
+  // Vidéo en édition (remplacement ou suppression avec nettoyage du fichier précédent)
+  const videoFileUpdate = input.videoFile;
+  const removeVideo = input.removeVideo;
+  if (videoFileUpdate) {
+    const rawType = (videoFileUpdate as File).type || 'video/mp4';
+    const safeVideoType = ['video/mp4', 'video/webm', 'video/quicktime'].includes(rawType)
+      ? rawType
+      : null;
+    if (!safeVideoType || !(await verifyMagicBytes(videoFileUpdate, 'video'))) {
+      throw new ApiError('Format vidéo non autorisé (utilisez MP4, WebM ou MOV).');
+    }
+    const ext = safeVideoType === 'video/webm' ? 'webm' : safeVideoType === 'video/quicktime' ? 'mov' : 'mp4';
+    const vPath = `${userId}/${Date.now()}-video-${randomSuffix()}.${ext}`;
+    const { error: vUpErr } = await sb.storage.from('listing-videos').upload(vPath, videoFileUpdate, { contentType: safeVideoType, upsert: false });
+    if (vUpErr) throw toApiError(vUpErr, 'L\u2019envoi de la vidéo a échoué.');
+    const vUrl = storageUrlForVideo(vPath) || '';
+    const { error: vDbErr } = await sb.from('listings').update({ video_url: vUrl, video_path: vPath }).eq('id', row.id);
+    if (!vDbErr && row.video_path && row.video_path !== vPath) {
+      await sb.storage.from('listing-videos').remove([row.video_path]).then(() => undefined, () => undefined);
+    }
+  } else if (removeVideo) {
+    const { error: vDelErr } = await sb.from('listings').update({ video_url: null, video_path: null }).eq('id', row.id);
+    if (!vDelErr && row.video_path) {
+      await sb.storage.from('listing-videos').remove([row.video_path]).then(() => undefined, () => undefined);
+    }
+  }
+  await runGeminiListingModeration(row.id);
 }
 
 export async function deleteListing(userId: string, slug: string, soft: boolean): Promise<void> {
   const sb = requireClient();
   const { data: listing, error: selErr } = await sb
     .from('listings')
-    .select('id, seller_id')
+    .select('id, seller_id, video_path, listing_images(storage_path)')
     .eq('slug', slug)
     .single();
   if (selErr || !listing) throw new ApiError('Annonce introuvable.');
-  const row = listing as { id: string; seller_id: string };
+  const row = listing as {
+    id: string;
+    seller_id: string;
+    video_path?: string | null;
+    listing_images?: { storage_path: string | null }[];
+  };
   if (row.seller_id !== userId) throw new ApiError('Action non autorisée.');
   if (soft) {
     const { error } = await sb.from('listings').update({ status: 'archived' }).eq('id', row.id);
     if (error) throw toApiError(error, 'L\u2019archivage a échoué.');
   } else {
+    const imagePaths = (row.listing_images || [])
+      .map((img) => img.storage_path)
+      .filter((p): p is string => Boolean(p));
+    const videoPath = row.video_path || null;
     const { error } = await sb.from('listings').delete().eq('id', row.id);
     if (error) throw toApiError(error, 'La suppression a échoué.');
+    if (imagePaths.length) {
+      await sb.storage.from('listing-images').remove(imagePaths).then(() => undefined, () => undefined);
+    }
+    if (videoPath) {
+      await sb.storage.from('listing-videos').remove([videoPath]).then(() => undefined, () => undefined);
+    }
   }
 }
 
@@ -597,21 +957,29 @@ export async function adminModerateListing(
   action: string,
 ): Promise<void> {
   const sb = requireClient();
-  // Si l'annonce est refusée, on purge ses images du stockage (bucket public).
+  // Refus d'annonce : purge les médias avant d'enregistrer le statut refusé.
   let imagePaths: string[] = [];
+  let videoPath: string | null = null;
   if (status === 'refused') {
-    const { data: imgs } = await sb
-      .from('listing_images')
-      .select('storage_path')
-      .eq('listing_id', listingId);
+    const [{ data: imgs }, { data: listing }] = await Promise.all([
+      sb.from('listing_images').select('storage_path').eq('listing_id', listingId),
+      sb.from('listings').select('video_path').eq('id', listingId).maybeSingle(),
+    ]);
     imagePaths = (imgs || [])
       .map((img) => img.storage_path as string | null)
       .filter((p): p is string => Boolean(p));
+    videoPath = (listing as { video_path?: string | null } | null)?.video_path ?? null;
   }
-  const { error } = await sb.from('listings').update({ status }).eq('id', listingId);
+  const { error } = await sb
+    .from('listings')
+    .update(status === 'refused' ? { status, video_path: null, video_url: null } : { status })
+    .eq('id', listingId);
   if (error) throw toApiError(error, 'La modération a échoué.');
   if (imagePaths.length) {
     await sb.storage.from('listing-images').remove(imagePaths).then(() => undefined, () => undefined);
+  }
+  if (videoPath) {
+    await sb.storage.from('listing-videos').remove([videoPath]).then(() => undefined, () => undefined);
   }
   await sb
     .from('admin_audit_logs')
@@ -743,6 +1111,7 @@ export async function openConversation(
 
 export async function fetchConversations(userId: string): Promise<Conversation[]> {
   if (demoMode) return [];
+  if (!isUuid(userId)) throw new ApiError('Identifiant utilisateur invalide.');
   const sb = requireClient();
   const { data, error } = await sb
     .from('conversations')
@@ -909,7 +1278,7 @@ export function subscribeToConversation(
   conversationId: string,
   onMessage: (m: Message) => void,
 ): () => void {
-  if (demoMode) return () => undefined;
+  if (demoMode || !isUuid(conversationId)) return () => undefined;
   const sb = requireClient();
   let channel = convChannels.get(conversationId);
   if (!channel || !sb.realtime.channels.includes(channel)) {
@@ -969,6 +1338,57 @@ export function subscribeToNewMessages(onActivity: () => void): () => void {
  * Indicateur honnête : basé sur la confirmation réelle de l'adresse,
  * jamais un badge marketing.
  */
+export async function fetchReviews(sellerId: string): Promise<import('./types').Review[]> {
+  if (!demoMode) {
+    if (!isUuid(sellerId)) return [];
+    const sb = requireClient();
+    const { data, error } = await sb
+      .from('reviews')
+      .select('*')
+      .eq('seller_id', sellerId)
+      .order('created_at', { ascending: false });
+    if (error) throw toApiError(error, 'Impossible de charger les avis.');
+    return (data || []) as import('./types').Review[];
+  }
+  try {
+    const raw = localStorage.getItem('gm_reviews_' + sellerId);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+export async function addReview(sellerId: string, authorId: string, rating: number, comment: string): Promise<void> {
+  const safeRating = Math.max(1, Math.min(5, Math.round(rating)));
+  const cleanComment = comment.trim().slice(0, 1000);
+  if (cleanComment.length < 10) {
+    throw new ApiError('Votre avis doit contenir au moins 10 caractères.');
+  }
+  if (!demoMode) {
+    if (!isUuid(sellerId) || !isUuid(authorId)) throw new ApiError('Identifiant invalide.');
+    const sb = requireClient();
+    const { error } = await sb.from('reviews').insert({
+      seller_id: sellerId,
+      author_id: authorId,
+      rating: safeRating,
+      comment: cleanComment,
+    });
+    if (error) throw toApiError(error, 'Impossible d\u2019enregistrer votre avis.');
+    return;
+  }
+  const key = 'gm_reviews_' + sellerId;
+  let arr: any[] = [];
+  try {
+    arr = JSON.parse(localStorage.getItem(key) || '[]');
+  } catch {}
+  arr.unshift({
+    id: 'rv_' + Date.now(),
+    seller_id: sellerId,
+    author_id: authorId,
+    rating: safeRating,
+    comment: cleanComment,
+    created_at: new Date().toISOString(),
+  });
+  localStorage.setItem(key, JSON.stringify(arr.slice(0, 50)));
+}
 export async function isEmailConfirmed(profileId: string): Promise<boolean> {
   if (demoMode) return false;
   const sb = requireClient();
@@ -980,16 +1400,283 @@ export async function isEmailConfirmed(profileId: string): Promise<boolean> {
 }
 
 export async function fetchOwnProfile(userId: string): Promise<Profile | null> {
+  if (!isUuid(userId)) return null;
   const sb = requireClient();
   const { data, error } = await sb.from('profiles').select('*').eq('id', userId).maybeSingle();
   if (error) throw toApiError(error, 'Profil indisponible.');
-  return (data as Profile | null) ?? null;
+  return data ? sanitizeProfile(data as Profile) : null;
 }
 
+const ALLOWED_PROFILE_PATCH_KEYS = new Set([
+  'display_name',
+  'pseudonym',
+  'username',
+  'city',
+  'account_type',
+  'shop_lat',
+  'shop_lng',
+  'shop_label',
+]);
+
 export async function updateOwnProfile(userId: string, patch: Record<string, unknown>): Promise<void> {
+  if (!isUuid(userId)) throw new ApiError('Identifiant utilisateur invalide.');
+  const safePatch: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (ALLOWED_PROFILE_PATCH_KEYS.has(k)) safePatch[k] = v;
+  }
+  if (!Object.keys(safePatch).length) return;
   const sb = requireClient();
-  const { error } = await sb.from('profiles').update(patch).eq('id', userId);
+  const { error } = await sb.from('profiles').update(safePatch).eq('id', userId);
   if (error) throw toApiError(error, 'La mise à jour du profil a échoué.');
+}
+
+function extractAvatarStoragePath(userId: string, url: string | null | undefined): string | null {
+  if (!url) return null;
+  const marker = '/storage/v1/object/public/avatars/';
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  const path = decodeURIComponent(url.slice(idx + marker.length).split('?')[0]);
+  return path.startsWith(`${userId}/`) ? path : null;
+}
+
+/** Upload d'une photo de profil compressée dans le bucket public `avatars`. */
+export async function uploadProfileAvatar(userId: string, blob: Blob): Promise<string> {
+  if (demoMode) throw new ApiError('La photo de profil n\u2019est pas modifiable en mode démo.');
+  const sb = requireClient();
+  const { data: curProf } = await sb.from('profiles').select('avatar_url').eq('id', userId).maybeSingle();
+  const oldPath = extractAvatarStoragePath(userId, (curProf as { avatar_url?: string | null } | null)?.avatar_url);
+
+  const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/jpeg' ? 'jpg' : 'webp';
+  const path = `${userId}/avatar-${Date.now()}.${ext}`;
+  const { error: upErr } = await sb.storage.from('avatars').upload(path, blob, {
+    contentType: blob.type || 'image/webp',
+    upsert: true,
+    cacheControl: '3600',
+  });
+  if (upErr) throw toApiError(upErr, 'L\u2019envoi de la photo de profil a échoué.');
+  const { data } = sb.storage.from('avatars').getPublicUrl(path);
+  const avatarUrl = data.publicUrl;
+  const { error: profErr } = await sb
+    .from('profiles')
+    .update({ avatar_url: avatarUrl })
+    .eq('id', userId);
+  if (profErr) {
+    await sb.storage.from('avatars').remove([path]).then(() => undefined, () => undefined);
+    throw toApiError(profErr, 'Impossible d\u2019enregistrer la photo sur votre profil.');
+  }
+  if (oldPath && oldPath !== path) {
+    await sb.storage.from('avatars').remove([oldPath]).then(() => undefined, () => undefined);
+  }
+  return avatarUrl;
+}
+
+export async function removeProfileAvatar(userId: string): Promise<void> {
+  if (demoMode) return;
+  const sb = requireClient();
+  const { data: curProf } = await sb.from('profiles').select('avatar_url').eq('id', userId).maybeSingle();
+  const oldPath = extractAvatarStoragePath(userId, (curProf as { avatar_url?: string | null } | null)?.avatar_url);
+  const { error } = await sb.from('profiles').update({ avatar_url: null }).eq('id', userId);
+  if (error) throw toApiError(error, 'Impossible de retirer la photo de profil.');
+  if (oldPath) {
+    await sb.storage.from('avatars').remove([oldPath]).then(() => undefined, () => undefined);
+  }
+}
+
+// ============================================================
+// RECHERCHE D'UTILISATEURS (@username, nom, UUID ou ID court)
+// ============================================================
+
+export async function searchUsers(query: string, limit = 12): Promise<SearchedUser[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  if (demoMode) {
+    const q = trimmed.replace(/^[@#]+/, '').toLowerCase();
+    const match =
+      demoSeller.id.toLowerCase().includes(q) ||
+      shortUserId(demoSeller.id).startsWith(q) ||
+      (demoSeller.display_name || '').toLowerCase().includes(q) ||
+      (demoSeller.pseudonym || '').toLowerCase().includes(q);
+    return match
+      ? [
+          {
+            id: demoSeller.id,
+            username: demoSeller.pseudonym || 'demo',
+            display_name: demoSeller.display_name,
+            pseudonym: demoSeller.pseudonym,
+            avatar_url: demoSeller.avatar_url,
+            city: demoSeller.city,
+            account_type: demoSeller.account_type,
+            is_demo: true,
+            created_at: demoSeller.created_at,
+            followers_count: 0,
+            listings_count: demoListings.length,
+          },
+        ]
+      : [];
+  }
+  const sb = requireClient();
+  const { data, error } = await sb.rpc('search_users', { p_query: trimmed, p_limit: limit });
+  if (error) throw toApiError(error, 'Recherche d\u2019utilisateurs indisponible.');
+  return ((data || []) as Record<string, unknown>[]).map((row) => ({
+    id: String(row.id),
+    username: (row.username as string | null) ?? null,
+    display_name: (row.display_name as string | null) ?? null,
+    pseudonym: (row.pseudonym as string | null) ?? null,
+    avatar_url: safeMediaUrl(row.avatar_url as string | null),
+    city: (row.city as string | null) ?? null,
+    account_type: (row.account_type as Profile['account_type']) ?? 'particulier',
+    is_demo: Boolean(row.is_demo),
+    created_at: String(row.created_at),
+    followers_count: Number(row.followers_count ?? 0),
+    listings_count: Number(row.listings_count ?? 0),
+  }));
+}
+
+// ============================================================
+// ABONNEMENTS VENDEURS (`follows`) & NOTIFICATIONS (`user_notifications`)
+// ============================================================
+
+export async function fetchFollowSummary(
+  targetUserId: string,
+  viewerUserId?: string | null,
+): Promise<{ followersCount: number; followingCount: number; isFollowing: boolean }> {
+  if (demoMode || !targetUserId) {
+    return { followersCount: 0, followingCount: 0, isFollowing: false };
+  }
+  const sb = requireClient();
+  const [followersRes, followingRes, meRes] = await Promise.all([
+    sb.from('follows').select('follower_id', { count: 'exact', head: true }).eq('followed_id', targetUserId),
+    sb.from('follows').select('followed_id', { count: 'exact', head: true }).eq('follower_id', targetUserId),
+    viewerUserId && viewerUserId !== targetUserId
+      ? sb
+          .from('follows')
+          .select('follower_id')
+          .eq('follower_id', viewerUserId)
+          .eq('followed_id', targetUserId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  return {
+    followersCount: followersRes.count ?? 0,
+    followingCount: followingRes.count ?? 0,
+    isFollowing: Boolean(meRes.data),
+  };
+}
+
+export async function toggleFollowUser(followerId: string, followedId: string): Promise<boolean> {
+  if (demoMode) throw new ApiError('Le suivi de vendeurs nécessite le mode connecté.');
+  if (followerId === followedId) throw new ApiError('Vous ne pouvez pas suivre votre propre profil.');
+  const sb = requireClient();
+  const { data: existing } = await sb
+    .from('follows')
+    .select('follower_id')
+    .eq('follower_id', followerId)
+    .eq('followed_id', followedId)
+    .maybeSingle();
+  if (existing) {
+    const { error } = await sb
+      .from('follows')
+      .delete()
+      .eq('follower_id', followerId)
+      .eq('followed_id', followedId);
+    if (error) throw toApiError(error, 'Impossible de retirer cet abonnement.');
+    return false;
+  }
+  const { error } = await sb
+    .from('follows')
+    .insert({ follower_id: followerId, followed_id: followedId });
+  if (error) throw toApiError(error, 'Impossible de suivre cet utilisateur.');
+  return true;
+}
+
+export async function fetchFollowedUsers(userId: string): Promise<Profile[]> {
+  if (demoMode) return [];
+  const sb = requireClient();
+  const { data, error } = await sb
+    .from('follows')
+    .select('followed_id, created_at')
+    .eq('follower_id', userId)
+    .order('created_at', { ascending: false });
+  if (error || !data?.length) return [];
+  const ids = data.map((r) => r.followed_id as string);
+  const map = await fetchProfilesByIds(ids);
+  return ids.map((id) => map.get(id)).filter((p): p is Profile => Boolean(p));
+}
+
+export async function fetchUserNotifications(userId: string): Promise<UserNotification[]> {
+  if (demoMode) return [];
+  const sb = requireClient();
+  const { data, error } = await sb
+    .from('user_notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) return [];
+  return (data || []) as UserNotification[];
+}
+
+export async function markUserNotificationRead(userId: string, notifId: string): Promise<void> {
+  if (demoMode) return;
+  const sb = requireClient();
+  await sb
+    .from('user_notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('id', notifId)
+    .eq('user_id', userId)
+    .then(() => undefined, () => undefined);
+}
+
+export async function markAllUserNotificationsRead(userId: string): Promise<void> {
+  if (demoMode) return;
+  const sb = requireClient();
+  await sb
+    .from('user_notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .is('read_at', null)
+    .then(() => undefined, () => undefined);
+}
+
+export async function clearUserNotifications(userId: string): Promise<void> {
+  if (demoMode) return;
+  const sb = requireClient();
+  await sb
+    .from('user_notifications')
+    .delete()
+    .eq('user_id', userId)
+    .then(() => undefined, () => undefined);
+}
+
+export function subscribeToUserNotifications(
+  userId: string,
+  onInsert: (n: UserNotification) => void,
+): () => void {
+  if (demoMode || !isUuid(userId)) return () => undefined;
+  const sb = requireClient();
+  const topic = `user-notifs:${userId}`;
+  const existing = sb.realtime.channels.find((ch) => ch.topic.endsWith(topic));
+  if (existing) {
+    void sb.removeChannel(existing);
+  }
+  const channel = sb
+    .channel(topic)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'user_notifications',
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => {
+        if (payload?.new) onInsert(payload.new as UserNotification);
+      },
+    )
+    .subscribe();
+  return () => {
+    void sb.removeChannel(channel);
+  };
 }
 
 // ============================================================
