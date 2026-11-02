@@ -93,7 +93,9 @@ Deno.serve(async (req) => {
   const geminiKey = Deno.env.get('GEMINI_API_KEY');
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!geminiKey || !supabaseUrl || !serviceKey) return json(req, { error: 'moderation_not_configured' }, 503);
+  // Free-only fail-closed: never invoke Gemini unless the operator explicitly confirms free-tier-only setup.
+  const freeTierOnly = Deno.env.get('GEMINI_FREE_TIER_ONLY') === 'true';
+  if (!freeTierOnly || !geminiKey || !supabaseUrl || !serviceKey) return json(req, { error: 'moderation_not_configured' }, 503);
 
   const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   if (!token) return json(req, { error: 'unauthorized' }, 401);

@@ -17,6 +17,7 @@ import { requestUserPosition } from '../lib/geolocation';
 import type { Category, ListingFull, Locality, ListingCondition, SearchedUser } from '../lib/types';
 import { CONDITION_LABELS, shortUserId } from '../lib/types';
 import { SavedSearchBanner } from '../components/SavedSearchBanner';
+import GeminiSearchAssistant from '../components/GeminiSearchAssistant';
 import { usePageMeta } from '../hooks/usePageMeta';
 
 const PAGE_SIZE = 12;
@@ -43,6 +44,7 @@ export default function Catalog({ fixedCat }: { fixedCat?: string }) {
   const min = params.get('min') || '';
   const max = params.get('max') || '';
   const cond = (params.get('cond') || '') as ListingCondition | '';
+  const strictPublicOnly = params.get('live') === '1';
   const sort = (params.get('sort') || 'newest') as 'newest' | 'price_asc' | 'price_desc';
   const lat = params.get('lat') ? Number(params.get('lat')) : undefined;
   const lng = params.get('lng') ? Number(params.get('lng')) : undefined;
@@ -65,7 +67,7 @@ export default function Catalog({ fixedCat }: { fixedCat?: string }) {
   }, []);
 
   useEffect(() => {
-    if (!q.trim() || fixedCat) {
+    if (!q.trim() || fixedCat || strictPublicOnly) {
       setMatchedUsers([]);
       return;
     }
@@ -80,7 +82,7 @@ export default function Catalog({ fixedCat }: { fixedCat?: string }) {
     return () => {
       active = false;
     };
-  }, [q, fixedCat]);
+  }, [q, fixedCat, strictPublicOnly]);
 
   useEffect(() => {
     let active = true;
@@ -93,6 +95,7 @@ export default function Catalog({ fixedCat }: { fixedCat?: string }) {
       minPrice: min ? Number(min) : undefined,
       maxPrice: max ? Number(max) : undefined,
       condition: cond || undefined,
+      strictPublicOnly,
       sort,
       lat,
       lng,
@@ -109,7 +112,7 @@ export default function Catalog({ fixedCat }: { fixedCat?: string }) {
     return () => {
       active = false;
     };
-  }, [q, cat, city, min, max, cond, sort, page, lat, lng]);
+  }, [q, cat, city, min, max, cond, strictPublicOnly, sort, page, lat, lng]);
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -334,6 +337,7 @@ export default function Catalog({ fixedCat }: { fixedCat?: string }) {
         </section>
       )}
 
+      {!fixedCat && <GeminiSearchAssistant categories={categories} localities={localities} />}
       <SavedSearchBanner query={q} />
 
       <div className="catalog__layout">

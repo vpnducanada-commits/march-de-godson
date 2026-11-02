@@ -5573,3 +5573,49 @@ body::after{ content:""; position:fixed; inset:0; pointer-events:none; opacity:0
 }
 
 
+
+/* Gemini Marketplace tools — optional, bounded and reviewable suggestions. */
+.gemini-search { margin: 0 0 16px; }
+.gemini-search__toggle { border-color: rgba(37,99,235,.28); color: var(--blue); }
+.gemini-search__panel, .ai-helper, .admin-ai-triage {
+  border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 16px;
+}
+.gemini-search__panel { margin-top: 10px; box-shadow: var(--shadow-sm); }
+.gemini-search__heading { display: grid; gap: 4px; margin-bottom: 12px; }
+.gemini-search__heading strong { color: var(--text); }
+.gemini-search__heading span, .gemini-search__result p { color: var(--text-2); font-size: 13px; line-height: 1.45; margin: 0; }
+.gemini-search__form { display: flex; gap: 8px; }
+.gemini-search__form input { flex: 1; min-width: 0; }
+.gemini-search__error, .ai-helper__error { color: var(--red); font-size: 13px; margin: 10px 0 0; }
+.gemini-search__result { margin-top: 14px; display: grid; gap: 9px; }
+.gemini-search__chips { display: flex; gap: 7px; flex-wrap: wrap; }
+.gemini-search__chips span { background: var(--blue-bg); color: var(--navy); border-radius: 999px; padding: 5px 9px; font-size: 12px; font-weight: 600; }
+:root[data-theme='dark'] .gemini-search__chips span { color: var(--text); }
+.ai-helper { background: var(--surface-2); }
+.ai-helper__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.ai-helper__head .form-section__title { margin-top: 0; }
+.ai-helper__draft { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; color: var(--text); overflow-wrap: anywhere; }
+.ai-helper__draft p { margin: 0 0 8px; line-height: 1.5; }
+.ai-helper__actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.ai-helper__error { color: var(--red); }
+.price-guide { display: grid; justify-items: start; gap: 8px; margin-top: 12px; }
+.price-guide__result { display: grid; gap: 4px; padding: 12px; width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); }
+.price-guide__result strong { font-size: 13px; }
+.price-guide__result span { color: var(--blue); font-size: 14px; font-weight: 700; }
+.price-guide__result small { color: var(--text-2); line-height: 1.4; }
+.admin-ai-triage { display: grid; gap: 12px; margin: 0 0 16px; }
+.admin-ai-triage h2 { display: flex; gap: 7px; align-items: center; margin: 0 0 6px; font-size: 16px; }
+.admin-ai-triage > div > p { color: var(--text-2); font-size: 13px; line-height: 1.5; margin: 0; max-width: 850px; }
+.admin-ai-triage__items { display: grid; gap: 8px; }
+.admin-ai-triage__item { border: 1px solid var(--border); border-left: 4px solid var(--blue); border-radius: var(--radius); padding: 11px 13px; background: var(--surface-2); }
+.admin-ai-triage__item--high { border-left-color: var(--red); }
+.admin-ai-triage__item--medium { border-left-color: var(--gold-dark); }
+.admin-ai-triage__item a { font-weight: 700; }
+.admin-ai-triage__priority { margin-left: 9px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-2); }
+.admin-ai-triage__item p { margin: 6px 0 3px; font-size: 13px; line-height: 1.45; }
+.admin-ai-triage__item small { color: var(--text-2); }
+@media (max-width: 640px) {
+  .gemini-search__form, .ai-helper__head { flex-direction: column; align-items: stretch; }
+  .gemini-search__form .btn, .ai-helper__head > .btn { width: 100%; justify-content: center; }
+  .admin-ai-triage__priority { display: block; margin: 5px 0 0; }
+}

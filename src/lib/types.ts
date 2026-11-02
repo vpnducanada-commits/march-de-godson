@@ -188,6 +188,8 @@ export interface ListingQuery {
   minPrice?: number;
   maxPrice?: number;
   condition?: ListingCondition;
+  /** Désactive le cache et exclut les annonces de démonstration; utilisé par la recherche assistée. */
+  strictPublicOnly?: boolean;
   lat?: number;
   lng?: number;
   sort?: 'newest' | 'price_asc' | 'price_desc';

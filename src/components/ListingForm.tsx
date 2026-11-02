@@ -10,7 +10,10 @@ import {
   publishListing,
   updateListing,
   ListingModerationError,
+  suggestListingDraft,
+  fetchPublicPriceGuide,
 } from '../lib/api';
+import type { GeminiListingSuggestion, PublicPriceGuide } from '../lib/api';
 import {
   processImage,
   validateImage,
@@ -76,6 +79,12 @@ export default function ListingForm({ mode, slug, onSuccess }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [publishStep, setPublishStep] = useState(0);
   const [formError, setFormError] = useState<string | null>(null);
+  const [assistantLoading, setAssistantLoading] = useState(false);
+  const [assistantDraft, setAssistantDraft] = useState<GeminiListingSuggestion | null>(null);
+  const [assistantError, setAssistantError] = useState('');
+  const [priceGuideLoading, setPriceGuideLoading] = useState(false);
+  const [priceGuide, setPriceGuide] = useState<PublicPriceGuide | null>(null);
+  const [priceGuideError, setPriceGuideError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -149,6 +158,37 @@ export default function ListingForm({ mode, slug, onSuccess }: Props) {
     const cat = categories.find((c) => c.id === Number(subcategory || category));
     return ['services', 'emploi', 'education', 'travaux'].includes(cat?.slug || '');
   }, [categories, category, subcategory]);
+
+  const runListingAssistant = async () => {
+    if (assistantLoading) return;
+    const categoryId = Number(subcategory || category);
+    if (!categoryId) { setAssistantError('Choisis d’abord une catégorie.'); return; }
+    setAssistantLoading(true); setAssistantError(''); setAssistantDraft(null);
+    try {
+      setAssistantDraft(await suggestListingDraft({ title, description, categoryId, price: noPrice ? '' : price }));
+    } catch (err) {
+      setAssistantError(err instanceof Error ? err.message : 'Aide indisponible.');
+    } finally { setAssistantLoading(false); }
+  };
+
+  const applySuggestedCategory = () => {
+    const target = categories.find((item) => item.slug === assistantDraft?.suggestedCategorySlug);
+    if (!target) return;
+    if (target.parent_id === null) { setCategory(String(target.id)); setSubcategory(''); return; }
+    const parent = categories.find((item) => item.id === target.parent_id);
+    if (parent) { setCategory(String(parent.id)); setSubcategory(String(target.id)); }
+  };
+
+  const loadPriceGuide = async () => {
+    const categoryId = Number(subcategory || category);
+    if (!categoryId || priceGuideLoading) return;
+    setPriceGuideLoading(true); setPriceGuideError(''); setPriceGuide(null);
+    try { setPriceGuide(await fetchPublicPriceGuide(categoryId, city ? Number(city) : null)); }
+    catch (err) { setPriceGuideError(err instanceof Error ? err.message : 'Comparaison indisponible.'); }
+    finally { setPriceGuideLoading(false); }
+  };
+
+  const formatGuidePrice = (value: number) => `${new Intl.NumberFormat('fr-FR').format(value)} FCFA`;
 
   const addFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -476,6 +516,35 @@ export default function ListingForm({ mode, slug, onSuccess }: Props) {
         </div>
       </section>
 
+      {/* Aide de rédaction facultative : rien n'est appliqué ni publié automatiquement. */}
+      <section className="form-section ai-helper">
+        <div className="ai-helper__head">
+          <div>
+            <h2 className="form-section__title"><Icon name="sparkles" size={18} /> Aide Gemini à la rédaction</h2>
+            <p className="form-hint">Propose un titre et une description à partir de tes champs. Gemini ne reçoit ni tes coordonnées ni tes messages; vérifie la proposition avant de l’appliquer.</p>
+          </div>
+          <button type="button" className="btn btn--ghost" onClick={() => void runListingAssistant()} disabled={assistantLoading || !session?.user}>
+            {assistantLoading ? 'Rédaction…' : 'Proposer un texte'}
+          </button>
+        </div>
+        {assistantError && <p className="ai-helper__error" role="alert">{assistantError}</p>}
+        {assistantDraft && (
+          <div className="ai-helper__draft" aria-live="polite">
+            <p><strong>Titre proposé :</strong> {assistantDraft.suggestedTitle}</p>
+            <p><strong>Description proposée :</strong> {assistantDraft.suggestedDescription}</p>
+            {assistantDraft.missingFacts.length > 0 && <p><strong>À préciser :</strong> {assistantDraft.missingFacts.join(' · ')}</p>}
+            <div className="ai-helper__actions">
+              <button type="button" className="btn btn--primary btn--sm" onClick={() => { setTitle(assistantDraft.suggestedTitle); setDescription(assistantDraft.suggestedDescription); }}>
+                Appliquer titre et description
+              </button>
+              {assistantDraft.suggestedCategorySlug && categories.find((item) => item.slug === assistantDraft.suggestedCategorySlug) && (
+                <button type="button" className="btn btn--ghost btn--sm" onClick={applySuggestedCategory}>Utiliser la catégorie proposée</button>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* Prix */}
       <section className="form-section">
         <h2 className="form-section__title">
@@ -514,6 +583,21 @@ export default function ListingForm({ mode, slug, onSuccess }: Props) {
             <input type="checkbox" checked={negotiable} onChange={(e) => setNegotiable(e.target.checked)} />
             <span>Le prix est négociable</span>
           </label>
+        </div>
+        <div className="price-guide">
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => void loadPriceGuide()} disabled={!category || priceGuideLoading}>
+            <Icon name="tag" size={15} /> {priceGuideLoading ? 'Comparaison…' : 'Comparer les prix observés'}
+          </button>
+          {priceGuideError && <p className="ai-helper__error" role="alert">{priceGuideError}</p>}
+          {priceGuide && (priceGuide.sampleCount < 5 ? (
+            <p className="form-hint">Données réelles insuffisantes : moins de 5 annonces actives comparables. Aucune estimation affichée.</p>
+          ) : (
+            <div className="price-guide__result" aria-live="polite">
+              <strong>Repère observé sur {priceGuide.sampleCount} annonces publiques actives{city ? ` à ${localities.find((item) => item.id === Number(city))?.name || 'la localité choisie'}` : ' au Gabon'}</strong>
+              <span>{formatGuidePrice(priceGuide.low!)} – {formatGuidePrice(priceGuide.high!)} · médiane {formatGuidePrice(priceGuide.median!)}</span>
+              <small>Repère statistique uniquement, pas une promesse de vente. Les annonces de démonstration sont exclues.</small>
+            </div>
+          ))}
         </div>
       </section>
 

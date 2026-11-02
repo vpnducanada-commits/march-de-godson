@@ -21,7 +21,9 @@ import {
   adminAddLocality,
   fetchCategories,
   fetchLocalities,
+  triagePublicReports,
 } from '../lib/api';
+import type { PublicReportTriageItem } from '../lib/api';
 import type { AdminUser, Category, ListingFull, Locality, Report } from '../lib/types';
 
 type ReportExt = Report & { listings?: { title: string; slug: string } | null };
@@ -49,6 +51,9 @@ export default function Admin() {
 
   // Signalements
   const [reports, setReports] = useState<ReportExt[] | null>(null);
+  const [triageItems, setTriageItems] = useState<PublicReportTriageItem[] | null>(null);
+  const [triageBusy, setTriageBusy] = useState(false);
+  const [triageError, setTriageError] = useState('');
 
   // Utilisateurs
   const [users, setUsers] = useState<AdminUser[] | null>(null);
@@ -75,6 +80,14 @@ export default function Admin() {
   const loadReports = useCallback(() => {
     adminFetchReports().then((r) => setReports(r)).catch((e) => setError(e instanceof Error ? e.message : 'Signalements indisponibles.'));
   }, []);
+
+  const runPublicReportTriage = async () => {
+    if (triageBusy) return;
+    setTriageBusy(true); setTriageError(''); setTriageItems(null);
+    try { setTriageItems((await triagePublicReports()).items); }
+    catch (e) { setTriageError(e instanceof Error ? e.message : 'Aide au tri indisponible.'); }
+    finally { setTriageBusy(false); }
+  };
 
   const loadUsers = useCallback(() => {
     adminFetchUsers().then(setUsers).catch((e) => setError(e instanceof Error ? e.message : 'Utilisateurs indisponibles.'));
@@ -325,6 +338,28 @@ export default function Admin() {
 
       {tab === 'reports' && (
         <>
+          <section className="admin-ai-triage">
+            <div>
+              <h2><Icon name="sparkles" size={17} /> Aide au tri des signalements publics</h2>
+              <p>Gemini examine uniquement le titre, la description publique, la catégorie et les motifs prédéfinis des annonces actives. Les détails libres et les messages privés ne sont pas transmis. Ses priorités sont des suggestions : l’admin décide.</p>
+            </div>
+            <button type="button" className="btn btn--ghost" onClick={() => void runPublicReportTriage()} disabled={triageBusy}>
+              {triageBusy ? 'Analyse…' : 'Trier les signalements ouverts'}
+            </button>
+            {triageError && <p className="ai-helper__error" role="alert">{triageError}</p>}
+            {triageItems && (triageItems.length ? (
+              <div className="admin-ai-triage__items" aria-live="polite">
+                {triageItems.map((item) => (
+                  <div key={item.listingId} className={`admin-ai-triage__item admin-ai-triage__item--${item.priority}`}>
+                    <Link to={`/annonce/${item.slug}`}>{item.title}</Link>
+                    <span className="admin-ai-triage__priority">{item.priority === 'high' ? 'À examiner en priorité' : item.priority === 'medium' ? 'À vérifier' : 'Priorité faible'}</span>
+                    <p>{item.summary}</p>
+                    <small>Confiance indicative : {Math.round(item.confidence * 100)} %</small>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="form-hint">Aucun signalement ouvert lié à une annonce publique active.</p>)}
+          </section>
           {!reports && <Spinner label="Chargement des signalements…" />}
           {reports && reports.length === 0 && <EmptyState icon="flag" title="Aucun signalement" message="Les signalements envoyés par les utilisateurs apparaîtront ici." />}
           {reports && reports.length > 0 && (

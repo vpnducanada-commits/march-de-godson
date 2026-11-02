@@ -262,7 +262,9 @@ async function fetchProfilesByIds(ids: string[]): Promise<Map<string, Profile>> 
 // ============================================================
 
 export async function fetchListings(query: ListingQuery): Promise<PageResult> {
-  if (demoMode) return demoListingsQuery(query);
+  if (demoMode) return query.strictPublicOnly
+    ? { items: [], total: 0, page: query.page ?? 1, pageSize: query.pageSize ?? 12 }
+    : demoListingsQuery(query);
   const sb = requireClient();
   const pageSize = query.pageSize ?? 12;
   const page = query.page ?? 1;
@@ -279,6 +281,7 @@ export async function fetchListings(query: ListingQuery): Promise<PageResult> {
     // Double sécurité avec la politique RLS : jamais d'annonce expirée au catalogue.
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false });
+  if (query.strictPublicOnly) q = q.eq('is_demo', false);
 
   if (hasNear) {
     // En mode proximité, on récupère l'ensemble des annonces actives filtrées pour trier par distance réelle
@@ -324,7 +327,7 @@ export async function fetchListings(query: ListingQuery): Promise<PageResult> {
     count = r.count;
     if (error) throw error;
   } catch (e) {
-    const cached = await getCachedListings();
+    const cached = query.strictPublicOnly ? [] : await getCachedListings();
     if (cached.length) return { items: cached.slice(0, pageSize), total: cached.length, page, pageSize };
     throw toApiError(e, 'Recherche impossible (hors ligne).');
   }
@@ -627,6 +630,103 @@ async function runGeminiListingModeration(listingId: string): Promise<void> {
   if (!result || result.outcome !== 'approved') {
     throw new ApiError(result?.message || 'Annonce bloquée par le contrôle automatique. Corrigez le contenu ou ajoutez une photo/vidéo plus claire.');
   }
+}
+
+export interface GeminiListingSuggestion {
+  suggestedTitle: string;
+  suggestedDescription: string;
+  suggestedCategorySlug: string | null;
+  missingFacts: string[];
+}
+export interface GeminiSearchIntent {
+  keywords: string;
+  categorySlug: string | null;
+  citySlug: string | null;
+  minPrice: number | null;
+  maxPrice: number | null;
+  condition: Listing['condition'] | null;
+}
+export interface PublicReportTriageItem {
+  listingId: string;
+  slug: string;
+  title: string;
+  priority: 'low' | 'medium' | 'high';
+  summary: string;
+  confidence: number;
+}
+export interface PublicPriceGuide {
+  sampleCount: number;
+  low: number | null;
+  median: number | null;
+  high: number | null;
+}
+
+async function invokeGeminiTool<T>(body: Record<string, unknown>): Promise<T> {
+  if (demoMode) throw new ApiError('Cette aide nécessite le catalogue GODSON connecté; aucune donnée de démonstration ne sera utilisée.');
+  const { data, error } = await requireClient().functions.invoke('gemini-marketplace-tools', { body });
+  if (error) {
+    let code = '';
+    try {
+      const context = (error as unknown as { context?: Response }).context;
+      if (context) code = String((await context.clone().json())?.error || '');
+    } catch { /* Réponse non JSON : message générique et sûr. */ }
+    if (code === 'daily_limit_reached' || code === 'free_quota_unavailable') {
+      throw new ApiError('Le quota gratuit de cette aide est atteint pour le moment. Aucun basculement payant n’est effectué.');
+    }
+    if (code === 'authentication_required') throw new ApiError('Connectez-vous pour utiliser cette aide.');
+    if (code === 'admin_required') throw new ApiError('Cette fonction est réservée à l’administration.');
+    throw new ApiError('L’aide Gemini est temporairement indisponible. Réessayez plus tard.');
+  }
+  const result = data as ({ error?: string } & Record<string, unknown>) | null;
+  if (result?.error) {
+    if (result.error === 'daily_limit_reached' || result.error === 'free_quota_unavailable') {
+      throw new ApiError('Le quota gratuit de cette aide est atteint pour le moment. Aucun basculement payant n’est effectué.');
+    }
+    if (result.error === 'authentication_required') throw new ApiError('Connectez-vous pour utiliser cette aide.');
+    if (result.error === 'admin_required') throw new ApiError('Cette fonction est réservée à l’administration.');
+    throw new ApiError('L’aide Gemini n’a pas pu terminer la demande. Réessayez plus tard.');
+  }
+  return result as T;
+}
+
+export async function suggestListingDraft(input: {
+  title: string;
+  description: string;
+  categoryId: number;
+  price: string;
+}): Promise<GeminiListingSuggestion> {
+  return invokeGeminiTool<GeminiListingSuggestion>({ action: 'listing_suggestion', ...input });
+}
+
+export async function interpretListingSearch(query: string): Promise<GeminiSearchIntent> {
+  return invokeGeminiTool<GeminiSearchIntent>({ action: 'search_intent', query });
+}
+
+export async function triagePublicReports(): Promise<{ items: PublicReportTriageItem[]; notice: string }> {
+  return invokeGeminiTool<{ items: PublicReportTriageItem[]; notice: string }>({ action: 'public_report_triage' });
+}
+
+export async function fetchPublicPriceGuide(categoryId: number, cityId?: number | null): Promise<PublicPriceGuide> {
+  if (demoMode) return { sampleCount: 0, low: null, median: null, high: null };
+  const sb = requireClient();
+  let query = sb.from('listings')
+    .select('price')
+    .eq('category_id', categoryId)
+    .eq('status', 'active')
+    .eq('is_demo', false)
+    .not('price', 'is', null)
+    .gt('expires_at', new Date().toISOString())
+    .order('updated_at', { ascending: false })
+    .limit(250);
+  if (cityId) query = query.eq('city_id', cityId);
+  const { data, error } = await query;
+  if (error) throw toApiError(error, 'Impossible de comparer les prix observés.');
+  const values = (data || []).map((row) => Number(row.price)).filter((price) => Number.isFinite(price) && price > 0).sort((a, b) => a - b);
+  if (values.length < 5) return { sampleCount: values.length, low: null, median: null, high: null };
+  const quantile = (p: number) => values[Math.min(values.length - 1, Math.floor((values.length - 1) * p))];
+  const mid = Math.floor(values.length / 2);
+  const median = values.length % 2 ? values[mid] : Math.round((values[mid - 1] + values[mid]) / 2);
+  return { sampleCount: values.length, low: quantile(0.25), median, high: quantile(0.75) };
 }
 
 export async function publishListing(userId: string, input: PublishInput): Promise<string> {
