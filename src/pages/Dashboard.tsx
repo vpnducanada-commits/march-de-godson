@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { deleteListing, fetchSellerListings, updateListing, renewListing } from '../lib/api';
 import type { ListingFull } from '../lib/types';
-import { STATUS_LABELS, isListingExpired, daysUntilExpiry } from '../lib/types';
+import { STATUS_LABELS, isListingExpired, daysUntilExpiry, shortUserId } from '../lib/types';
 import { formatFCFA, timeAgo, formatDate } from '../lib/format';
 import { usePageMeta } from '../hooks/usePageMeta';
 
@@ -16,7 +16,7 @@ type Tab = 'active' | 'draft' | 'archived' | 'refused';
 
 export default function Dashboard() {
   usePageMeta('Mon espace', 'Gérez vos annonces : publication, modification, archivage.');
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const { toast } = useToast();
   const [tab, setTab] = useState<Tab>('active');
   const [items, setItems] = useState<ListingFull[] | null>(null);
@@ -110,10 +110,38 @@ export default function Dashboard() {
           <h1 className="page-title">Mon espace</h1>
           <p className="page-sub">Gérez vos annonces publiées sur GODSON Marketplace.</p>
         </div>
-        <Link to="/publier" className="btn btn--gold">
-          <Icon name="plus" size={16} /> Nouvelle annonce
-        </Link>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link to="/compte/parametres" className="btn btn--ghost">
+            <Icon name="sliders" size={16} /> Profil & @pseudo
+          </Link>
+          <Link to="/publier" className="btn btn--gold">
+            <Icon name="plus" size={16} /> Nouvelle annonce
+          </Link>
+        </div>
       </div>
+
+      {profile && (
+        <div className="dashboard-profile-strip">
+          <span className="user-card__avatar">
+            {profile.avatar_url ? (
+              <img src={profile.avatar_url} alt="" />
+            ) : (
+              (profile.display_name || profile.username || 'U').slice(0, 1).toUpperCase()
+            )}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <strong style={{ display: 'block', fontSize: 15 }}>
+              {profile.display_name || 'Mon profil'}
+            </strong>
+            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+              {profile.username ? `@${profile.username} · ` : ''}ID #{shortUserId(profile.id)}
+            </span>
+          </div>
+          <Link to={`/vendeur/${profile.username || profile.id}`} className="btn btn--ghost btn--sm">
+            <Icon name="eye" size={14} /> Profil public
+          </Link>
+        </div>
+      )}
 
       <div className="tabs" role="tablist" aria-label="Statuts des annonces">
         {(Object.keys(counts) as Tab[]).map((t) => (

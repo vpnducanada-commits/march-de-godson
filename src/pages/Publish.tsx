@@ -1,7 +1,10 @@
+import { useState } from 'react';
+import { Confetti } from '../components/Confetti';
 import { usePageMeta } from '../hooks/usePageMeta';
 import ListingForm from '../components/ListingForm';
 
 export default function Publish() {
+  const [showConfetti,setShowConfetti]=useState(false);
   usePageMeta('Publier une annonce', 'Publiez gratuitement votre annonce sur GODSON Marketplace : photos, prix en FCFA, localité et contact direct.');
   return (
     <div className="container page-narrow">
@@ -10,7 +13,8 @@ export default function Publish() {
         Remplissez ce formulaire pour rendre votre annonce visible par des acheteurs
         partout au Gabon. La publication est gratuite.
       </p>
-      <ListingForm mode="create" />
+      <ListingForm mode="create" onSuccess={()=>setShowConfetti(true)} />
+      <Confetti show={showConfetti} onDone={()=>setShowConfetti(false)} />
     </div>
   );
 }

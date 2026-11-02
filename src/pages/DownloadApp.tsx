@@ -82,6 +82,24 @@ export default function DownloadApp() {
         </div>
       </div>
 
+
+      {/* APK natif */}
+      <section className="card" style={{border:'2px solid #0a1633'}}>
+        <div style={{display:'flex', gap:12, alignItems:'center', marginBottom:10}}>
+          <span style={{width:48,height:48,borderRadius:12,background:'#0a1633',display:'grid',placeItems:'center',color:'#f5b82e',flexShrink:0}}><Icon name="smartphone" size={24}/></span>
+          <div>
+            <p style={{fontWeight:800, margin:0}}>APK Android natif (v2.9 · 6,8 Mo)</p>
+            <p style={{margin:0, fontSize:12, color:'var(--text-2)'}}>Fichier godson-marketplace.apk — écran de démarrage animé, s’installe sans Play Store, partageable par WhatsApp</p>
+          </div>
+          <span style={{marginLeft:'auto', background:'#16a34a', color:'#fff', fontSize:11, padding:'4px 8px', borderRadius:999, fontWeight:700}}>DIRECT</span>
+        </div>
+        <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+          <a href="/apk/godson-marketplace.apk" download="godson-marketplace.apk" className="btn btn--primary"><Icon name="download" size={16}/> Télécharger l’APK (.apk)</a>
+          <Link to="/faq" className="btn btn--ghost">Aide à l’installation</Link>
+        </div>
+        <p style={{fontSize:12, color:'var(--text-2)', marginTop:8}}>Sur Android : téléchargez le fichier → ouvrez-le → autorisez l’installation depuis cette source si demandé → Installer.</p>
+      </section>
+
       <div className="download__grid">
         {/* Carte principale */}
         <section className="card download__main">

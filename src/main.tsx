@@ -5,6 +5,7 @@ import { Analytics } from '@vercel/analytics/react';
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { NotificationsProvider } from './context/NotificationsContext';
 import { APP_VERSION } from './lib/version';
 import './styles/global.css';
 
@@ -26,10 +27,24 @@ if (import.meta.env.PROD && SENTRY_DSN) {
     .catch(() => undefined);
 }
 
-// PWA : enregistrement du service worker (build de production uniquement)
+// PWA : enregistrement du service worker + rechargement automatique unique
+// lorsqu'une nouvelle version remplace un ancien Service Worker (évite les
+// faux 404 sur les nouvelles routes après déploiement).
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
   import('virtual:pwa-register').then(({ registerSW }) => {
-    registerSW({ immediate: true });
+    registerSW({
+      immediate: true,
+      onRegisteredSW(_swUrl, registration) {
+        registration?.update().catch(() => undefined);
+      },
+    });
   });
 }
 
@@ -37,12 +52,14 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <ToastProvider>
-        <AuthProvider>
+      <AuthProvider>
+        <NotificationsProvider>
           {/* Vercel Analytics : mesure de performance + erreurs (RGPD-friendly,
               sans cookie), actif sur Vercel production uniquement. */}
           <Analytics />
           <App />
-        </AuthProvider>
+        </NotificationsProvider>
+      </AuthProvider>
       </ToastProvider>
     </BrowserRouter>
   </React.StrictMode>,

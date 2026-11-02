@@ -40,6 +40,35 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </>
   ),
+  'user-plus': (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <line x1="19" x2="19" y1="8" y2="14" />
+      <line x1="22" x2="16" y1="11" y2="11" />
+    </>
+  ),
+  'user-check': (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <polyline points="16 11 18 13 22 9" />
+    </>
+  ),
+  'at-sign': (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+    </>
+  ),
+  maximize: (
+    <>
+      <polyline points="15 3 21 3 21 9" />
+      <polyline points="9 21 3 21 3 15" />
+      <line x1="21" x2="14" y1="3" y2="10" />
+      <line x1="3" x2="10" y1="21" y2="14" />
+    </>
+  ),
   menu: (
     <>
       <path d="M4 6h16" />
@@ -205,6 +234,19 @@ const PATHS: Record<string, ReactNode> = {
       <path d="m3.3 7 8.7 5 8.7-5" />
     </>
   ),
+  bell: (
+    <>
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </>
+  ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </>
+  ),
+  moon: <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />,
   grid: (
     <>
       <rect width="7" height="7" x="3" y="3" rx="1" />
@@ -356,6 +398,12 @@ const PATHS: Record<string, ReactNode> = {
     <>
       <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </>
+  ),
+  video: (
+    <>
+      <path d="M14.67 12a1 1 0 0 0-1-.86H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8.67a1 1 0 0 0 1-.86L16 18V14z" />
+      <path d="M17 14 22 9v10l-5-5z" />
     </>
   ),
   globe: (

@@ -1,3 +1,5 @@
+import { verifyMagicBytes } from './security';
+
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 export const MAX_IMAGE_SIZE = 4 * 1024 * 1024; // 4 Mo avant compression
 export const MAX_IMAGES = 6;
@@ -33,6 +35,10 @@ function loadImage(file: File): Promise<HTMLImageElement> {
  * pour alléger l'envoi et l'affichage sur réseaux mobiles.
  */
 export async function processImage(file: File, maxDim = 1400, quality = 0.82): Promise<Blob> {
+  const validSignature = await verifyMagicBytes(file, 'image');
+  if (!validSignature) {
+    throw new Error('Fichier image invalide ou corrompu (utilisez JPG, PNG ou WebP).');
+  }
   const img = await loadImage(file);
   const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
   const w = Math.max(1, Math.round(img.width * scale));

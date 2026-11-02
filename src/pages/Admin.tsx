@@ -28,6 +28,7 @@ type ReportExt = Report & { listings?: { title: string; slug: string } | null };
 import { STATUS_LABELS, ACCOUNT_TYPE_LABELS } from '../lib/types';
 import { timeAgo, formatDate } from '../lib/format';
 import { slugify } from '../lib/normalize';
+import { escapeCsvCell } from '../lib/security';
 import { usePageMeta } from '../hooks/usePageMeta';
 
 type Tab = 'listings' | 'reports' | 'users' | 'catalog' | 'log';
@@ -129,7 +130,6 @@ export default function Admin() {
         p += 1;
         if (p > 40) break; // garde-fou : 2000 lignes max
       }
-      const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
       const headers = ['slug', 'titre', 'categorie', 'localite', 'prix_xaf', 'statut', 'creee_le', 'vendeur'];
       const rows = all.map((i) =>
         [
@@ -142,7 +142,7 @@ export default function Admin() {
           i.listing.created_at,
           i.seller?.display_name ?? '',
         ]
-          .map(esc)
+          .map(escapeCsvCell)
           .join(';'),
       );
       const csv = '\uFEFF' + [headers.join(';'), ...rows].join('\n');
