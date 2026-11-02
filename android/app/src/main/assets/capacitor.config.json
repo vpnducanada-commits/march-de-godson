@@ -1,0 +1,18 @@
+{
+	"appId": "com.godsonmarketplace.app",
+	"appName": "Godson Marketplace",
+	"webDir": "dist",
+	"android": {
+		"backgroundColor": "#0A1633",
+		"allowMixedContent": false
+	},
+	"plugins": {
+		"SplashScreen": {
+			"launchShowDuration": 220,
+			"launchAutoHide": true,
+			"launchFadeOutDuration": 220,
+			"backgroundColor": "#0A1633",
+			"showSpinner": false
+		}
+	}
+}

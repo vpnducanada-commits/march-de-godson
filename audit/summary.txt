@@ -1,0 +1,20 @@
+✅ PERF TTFB 113ms (html 3662 bytes, bundle CSS OK)
+✅ MOBILE viewport meta: width=device-width, initial-scale=1.0, viewport-fit=cover
+❌ A11Y images sans alt: 3/11
+✅ A11Y h1 count: 1 (attendu 1)
+✅ A11Y search input label: "Mot-clé de recherche"
+✅ MOBILE-FICHE actionbar fiche: présente
+✅ MOBILE-FICHE boutons actionbar:  | Appeler | WhatsApp
+❌ CATALOGUE cartes catalogue: 0
+✅ DESKTOP header nav desktop OK
+✅ DESKTOP cat-grid columns: 158.281px 158.281px 158.281px 158.297px 158.281px 158.281px 
+❌ THEME dark mode toggle échec
+✅ PWA manifest: OK application/manifest+json; charset=utf-8
+✅ LIENS liens testés 34, cassés 0 
+✅ VIDEO godson-marketplace-VIDEO-MANIP-1080x1920.mp4 Duration: 00:01:31.37
+✅ VIDEO godson-marketplace-VIDEO-MANIP-1920x1080.mp4 Duration: 00:01:31.37
+
+ISSUES:
+- [mineur] A11Y: 3 images sans alt => Ajouter alt
+- [bloquant] CATALOGUE: 0 annonces rendues => Vérifier fetch Supabase
+- [mineur] THEME: dark mode non fonctionnel => Vérifier toggle

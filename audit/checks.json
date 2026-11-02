@@ -1,0 +1,99 @@
+{
+  "checks": [
+    {
+      "section": "PERF",
+      "ok": true,
+      "detail": "TTFB 113ms (html 3662 bytes, bundle CSS OK)"
+    },
+    {
+      "section": "MOBILE",
+      "ok": true,
+      "detail": "viewport meta: width=device-width, initial-scale=1.0, viewport-fit=cover"
+    },
+    {
+      "section": "A11Y",
+      "ok": false,
+      "detail": "images sans alt: 3/11"
+    },
+    {
+      "section": "A11Y",
+      "ok": true,
+      "detail": "h1 count: 1 (attendu 1)"
+    },
+    {
+      "section": "A11Y",
+      "ok": true,
+      "detail": "search input label: \"Mot-clé de recherche\""
+    },
+    {
+      "section": "MOBILE-FICHE",
+      "ok": true,
+      "detail": "actionbar fiche: présente"
+    },
+    {
+      "section": "MOBILE-FICHE",
+      "ok": true,
+      "detail": "boutons actionbar:  | Appeler | WhatsApp"
+    },
+    {
+      "section": "CATALOGUE",
+      "ok": false,
+      "detail": "cartes catalogue: 0"
+    },
+    {
+      "section": "DESKTOP",
+      "ok": true,
+      "detail": "header nav desktop OK"
+    },
+    {
+      "section": "DESKTOP",
+      "ok": true,
+      "detail": "cat-grid columns: 158.281px 158.281px 158.281px 158.297px 158.281px 158.281px "
+    },
+    {
+      "section": "THEME",
+      "ok": false,
+      "detail": "dark mode toggle échec"
+    },
+    {
+      "section": "PWA",
+      "ok": true,
+      "detail": "manifest: OK application/manifest+json; charset=utf-8"
+    },
+    {
+      "section": "LIENS",
+      "ok": true,
+      "detail": "liens testés 34, cassés 0 "
+    },
+    {
+      "section": "VIDEO",
+      "ok": true,
+      "detail": "godson-marketplace-VIDEO-MANIP-1080x1920.mp4 Duration: 00:01:31.37"
+    },
+    {
+      "section": "VIDEO",
+      "ok": true,
+      "detail": "godson-marketplace-VIDEO-MANIP-1920x1080.mp4 Duration: 00:01:31.37"
+    }
+  ],
+  "issues": [
+    {
+      "sev": "mineur",
+      "where": "A11Y",
+      "what": "3 images sans alt",
+      "fix": "Ajouter alt"
+    },
+    {
+      "sev": "bloquant",
+      "where": "CATALOGUE",
+      "what": "0 annonces rendues",
+      "fix": "Vérifier fetch Supabase"
+    },
+    {
+      "sev": "mineur",
+      "where": "THEME",
+      "what": "dark mode non fonctionnel",
+      "fix": "Vérifier toggle"
+    }
+  ]
+}
