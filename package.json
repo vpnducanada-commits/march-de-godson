@@ -2,7 +2,7 @@
   "name": "godson-marketplace",
   "private": true,
   "version": "1.0.0",
-  "description": "GODSON MARKETPLACE \u2014 Le march\u00e9 gabonais, \u00e0 port\u00e9e de clic.",
+  "description": "GODSON MARKETPLACE — Le marché gabonais, à portée de clic.",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,18 +15,28 @@
     "demo-images": "node scripts/generate-demo-images.mjs",
     "test:api": "node tests/api.test.mjs",
     "test:e2e": "node tests/e2e/smoke.mjs",
-    "test:e2e:install": "playwright install chromium"
+    "test:e2e:install": "playwright install chromium",
+    "cap:build": "npm run build && npx cap copy android",
+    "cap:open": "npx cap open android",
+    "apk:debug": "npm run build && npx cap copy android && (cd android && ./gradlew assembleDebug)"
   },
   "dependencies": {
+    "@capacitor/android": "^7.6.10",
+    "@capacitor/core": "^7.6.10",
+    "@capacitor/geolocation": "^7.1.8",
     "@sentry/react": "^11.8.0",
     "@supabase/supabase-js": "^2.49.4",
     "@vercel/analytics": "^2.0.1",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.30.0"
+    "react-router-dom": "^7.18.5"
+  },
+  "overrides": {
+    "esbuild": "^0.25.12"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.10",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.20",
     "@types/react-dom": "^18.3.6",
